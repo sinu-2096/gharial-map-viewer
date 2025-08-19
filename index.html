@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Gharial GPS Viewer</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<style>
+  body { font-family: Arial, sans-serif; margin: 0; }
+  #controls { display:flex; flex-wrap:wrap; gap:10px; margin:10px; align-items:center; }
+  #map { height: 65vh; }
+  #dropzone { border: 2px dashed #888; padding: 15px; text-align: center;
+              color: #555; margin: 10px; border-radius: 6px; cursor: pointer; }
+  table { border-collapse: collapse; width: 100%; margin: 10px; }
+  th, td { border: 1px solid #ccc; padding: 4px; font-size: 0.9em; text-align:center; }
+  th { background: #eee; }
+</style>
+</head>
+<body>
+
+<h2 style="margin:10px;">Gharial GPS Viewer</h2>
+<div id="controls">
+  <label>Animal ID:
+    <select id="animalFilter"><option value="all">All</option></select>
+  </label>
+  <label>From: <input type="date" id="fromDate"></label>
+  <label>To: <input type="date" id="toDate"></label>
+  <label>Basemap:
+    <select id="basemapSelect">
+      <option value="osm">OSM</option>
+      <option value="esri">Esri Satellite</option>
+      <option value="google">Google Hybrid</option>
+    </select>
+  </label>
+  <button id="applyFilter">Apply Filter</button>
+  <button id="clearData">Clear Data</button>
+  <button id="exportCSV">Export CSV</button>
+</div>
+
+<input type="file" id="fileInput" accept=".kml" multiple style="display:none">
+<div id="dropzone">Drop KML file(s) here or click to select</div>
+<div id="status" style="margin:10px; font-style:italic; color:#555;"></div>
+<div id="map"></div>
+
+<table id="data-table">
+  <thead><tr><th>Animal ID</th><th>Date</th><th>Time</th><th>Lat</th><th>Lon</th></tr></thead>
+  <tbody></tbody>
+</table>
+<button id="viewMore" style="margin:10px;">View More</button>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script>
+
+let allPoints = [];
+let currentViewCount = 10;
+
+function updateAnimalFilterOptions() {
+  const select = document.getElementById('animalFilter');
+  const ids = [...new Set(allPoints.map(p => p.animalId))].sort();
+  select.innerHTML = '<option value="all">All</option>' + ids.map(id => `<option value="${id}">${id}</option>`).join('');
+}
+
+function renderMap(points) {
+  markersLayer.clearLayers();
+  points.forEach(p => {
+    L.circleMarker([p.lat, p.lon], {
+      color: getColor(p.animalId), radius: 10, weight: 2, opacity: 0.95
+    }).bindPopup(
+      `<b>${p.animalId}</b><br>${p.date||'—'} ${p.time||'—'}<br>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`
+    ).addTo(markersLayer);
+  });
+  if (points.length) {
+    map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lon])).pad(0.2));
+  }
+}
+
+function renderTable(points) {
+  const tbody = document.querySelector("#data-table tbody");
+  const visiblePoints = points.slice(0, currentViewCount);
+  tbody.innerHTML = visiblePoints.map((p, idx) => `
+    <tr>
+      <td>${p.animalId}</td>
+      <td class="clickable-date" data-index="${idx}">${p.date || '—'}</td>
+      <td>${p.time || '—'}</td>
+      <td>${p.lat.toFixed(5)}</td>
+      <td>${p.lon.toFixed(5)}</td>
+    </tr>
+  `).join('');
+
+  tbody.querySelectorAll('.clickable-date').forEach(cell => {
+    cell.style.cursor = 'pointer';
+    cell.style.textDecoration = 'underline';
+    cell.addEventListener('click', () => {
+      const point = points[cell.dataset.index];
+      if (point) {
+        markersLayer.eachLayer(layer => {
+          if (layer.getLatLng &&
+              layer.getLatLng().lat.toFixed(5) == point.lat.toFixed(5) &&
+              layer.getLatLng().lng.toFixed(5) == point.lon.toFixed(5)) {
+            map.setView(layer.getLatLng(), 14, { animate: true });
+            layer.openPopup();
+          }
+        });
+      }
+    });
+  });
+
+  document.getElementById('viewMore').style.display = (points.length > currentViewCount) ? 'inline-block' : 'none';
+}
+
+document.getElementById('viewMore').addEventListener('click', () => {
+  currentViewCount += 50;
+  applyFilter();
+});
+
+function applyFilter() {
+  const animalSel = document.getElementById('animalFilter').value;
+  const from = document.getElementById('fromDate').value;
+  const to = document.getElementById('toDate').value;
+  let filtered = allPoints.filter(p => {
+    if (animalSel !== 'all' && p.animalId !== animalSel) return false;
+    if (from && (!p.date || p.date < from)) return false;
+    if (to && (!p.date || p.date > to)) return false;
+    return true;
+  });
+  filtered.sort((a, b) =>
+    ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''))
+  );
+  renderMap(filtered);
+  renderTable(filtered);
+}
+
+function handleKMLtext(kmlString, filename) {
+  const xml = new DOMParser().parseFromString(kmlString, "application/xml");
+  const placemarks = Array.from(xml.getElementsByTagName('*'))
+    .filter(node => (node.localName || node.nodeName) === 'Placemark');
+  const serial = getSerialFromFilename(filename);
+  const mappedId = animalIdMapping[serial];
+  const animalId = mappedId || serial || 'Unknown';
+  const fileDT = parseFilenameForDateTime(filename);
+
+  placemarks.forEach(pm => {
+    const nameText = getFirstTextByLocalName(pm, 'name');
+    const coords = getLonLat(pm);
+    if (!coords) return;
+    let dt = parsePlacemarkDateTime(pm, nameText);
+    if (!dt && fileDT) dt = fileDT;
+    allPoints.push({
+      animalId,
+      date: dt ? dt.date : null,
+      time: dt ? dt.time : null,
+      lat: coords.lat,
+      lon: coords.lon
+    });
+  });
+}
+
+function handleFiles(files) {
+  const status = document.getElementById('status');
+  status.textContent = `Loading ${files.length} file(s)...`;
+  currentViewCount = 10;
+  let loaded = 0;
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      handleKMLtext(e.target.result, file.name);
+      loaded++;
+      if (loaded === files.length) {
+        updateAnimalFilterOptions();
+        applyFilter();
+        status.textContent = `Loaded: ${Array.from(files).map(f => f.name).join(', ')}`;
+      }
+    };
+    reader.readAsText(file);
+  });
+}
+
+function exportCSV(points) {
+  const header = ['Animal ID','Date','Time','Lat','Lon'];
+  const rows = points.map(p => [p.animalId, p.date, p.time, p.lat, p.lon]);
+  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'gharial-data.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+document.getElementById('dropzone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('dropzone').addEventListener('dragover', e => { e.preventDefault(); dropzone.style.background = '#eef'; });
+document.getElementById('dropzone').addEventListener('dragleave', e => { e.preventDefault(); dropzone.style.background = ''; });
+document.getElementById('dropzone').addEventListener('drop', e => {
+  e.preventDefault();
+  dropzone.style.background = '';
+  handleFiles(e.dataTransfer.files);
+});
+document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
+document.getElementById('applyFilter').addEventListener('click', applyFilter);
+document.getElementById('clearData').addEventListener('click', () => {
+  allPoints = [];
+  currentViewCount = 10;
+  markersLayer.clearLayers();
+  document.querySelector("#data-table tbody").innerHTML = '';
+  document.getElementById('animalFilter').innerHTML = '<option value="all">All</option>';
+  document.getElementById('status').textContent = '';
+});
+document.getElementById('exportCSV').addEventListener('click', () => exportCSV(allPoints));
+</script>
+</body>
+</html>
