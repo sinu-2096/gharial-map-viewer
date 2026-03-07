@@ -1,211 +1,343 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Gharial GPS Viewer</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<style>
-  body { font-family: Arial, sans-serif; margin: 0; }
-  #controls { display:flex; flex-wrap:wrap; gap:10px; margin:10px; align-items:center; }
-  #map { height: 65vh; }
-  #dropzone { border: 2px dashed #888; padding: 15px; text-align: center;
-              color: #555; margin: 10px; border-radius: 6px; cursor: pointer; }
-  table { border-collapse: collapse; width: 100%; margin: 10px; }
-  th, td { border: 1px solid #ccc; padding: 4px; font-size: 0.9em; text-align:center; }
-  th { background: #eee; }
-</style>
+    <meta charset="utf-8"/>
+    <title>Chambal Gharial Telemetry Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+    <style>
+        :root {
+            --primary: #facc15;
+            --dark: #1e293b;
+            --light: #f8fafc;
+            --border: #e2e8f0;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--light);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        #sidebar {
+            width: 400px;
+            background: white;
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+            z-index: 1000;
+        }
+
+        #map { flex: 1; z-index: 1; }
+
+        h2 { margin: 0 0 15px 0; font-size: 1.4rem; color: var(--dark); }
+
+        select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: white;
+            font-size: 1rem;
+            margin-bottom: 20px;
+            cursor: pointer;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            background: var(--light);
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            text-align: center;
+        }
+
+        .stat-card small { color: #64748b; font-size: 0.75rem; text-transform: uppercase; }
+        .stat-card div { font-weight: bold; font-size: 1.1rem; color: var(--dark); }
+
+        #table-container {
+            flex: 1;
+            overflow-y: auto;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+        }
+
+        table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+        th { background: #f1f5f9; padding: 10px; text-align: left; position: sticky; top: 0; }
+        td { padding: 8px 10px; border-bottom: 1px solid var(--border); }
+
+        .marker-id {
+            background: var(--primary);
+            color: black;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid black;
+            font-size: 11px;
+            white-space: nowrap;
+            box-shadow: 2px 2px 5px rgba(0,0,0,0.3);
+        }
+
+        .hidden { display: none !important; }
+        
+        /* Popup Styling */
+        .leaflet-popup-content-wrapper { border-radius: 8px; padding: 5px; }
+        .popup-title { font-weight: bold; border-bottom: 1px solid #ccc; margin-bottom: 5px; }
+    </style>
 </head>
 <body>
 
-<h2 style="margin:10px;">Gharial GPS Viewer</h2>
-<div id="controls">
-  <label>Animal ID:
-    <select id="animalFilter"><option value="all">All</option></select>
-  </label>
-  <label>From: <input type="date" id="fromDate"></label>
-  <label>To: <input type="date" id="toDate"></label>
-  <label>Basemap:
-    <select id="basemapSelect">
-      <option value="osm">OSM</option>
-      <option value="esri">Esri Satellite</option>
-      <option value="google">Google Hybrid</option>
+<div id="sidebar">
+    <h2>Gharial Telemetry</h2>
+    
+    <select id="animalSelect">
+        <option value="ALL">All Hatchlings (Latest)</option>
     </select>
-  </label>
-  <button id="applyFilter">Apply Filter</button>
-  <button id="clearData">Clear Data</button>
-  <button id="exportCSV">Export CSV</button>
+
+    <div id="details-view" class="hidden">
+        <div class="stats-grid">
+            <div class="stat-card">
+                <small>Points</small>
+                <div id="stat-entries">-</div>
+            </div>
+            <div class="stat-card">
+                <small>Days</small>
+                <div id="stat-days">-</div>
+            </div>
+            <div class="stat-card" style="grid-column: span 2;">
+                <small>Total Distance</small>
+                <div id="stat-dist">-</div>
+            </div>
+        </div>
+
+        <div id="table-container">
+            <table id="dataTable">
+                <thead>
+                    <tr>
+                        <th>Time</th>
+                        <th>Place</th>
+                        <th>Activity</th>
+                        <th>Signal</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
 </div>
 
-<input type="file" id="fileInput" accept=".kml" multiple style="display:none">
-<div id="dropzone">Drop KML file(s) here or click to select</div>
-<div id="status" style="margin:10px; font-style:italic; color:#555;"></div>
 <div id="map"></div>
 
-<table id="data-table">
-  <thead><tr><th>Animal ID</th><th>Date</th><th>Time</th><th>Lat</th><th>Lon</th></tr></thead>
-  <tbody></tbody>
-</table>
-<button id="viewMore" style="margin:10px;">View More</button>
-
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
+    const SHEET_URL = "https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv";
 
-let allPoints = [];
-let currentViewCount = 10;
+    const map = L.map('map').setView([25.85, 76.57], 13);
+    L.tileLayer('https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}', { maxZoom: 20 }).addTo(map);
 
-function updateAnimalFilterOptions() {
-  const select = document.getElementById('animalFilter');
-  const ids = [...new Set(allPoints.map(p => p.animalId))].sort();
-  select.innerHTML = '<option value="all">All</option>' + ids.map(id => `<option value="${id}">${id}</option>`).join('');
-}
+    let allData = [];
+    let markersLayer = L.featureGroup().addTo(map);
+    let trackLayer = L.featureGroup().addTo(map);
 
-function renderMap(points) {
-  markersLayer.clearLayers();
-  points.forEach(p => {
-    L.circleMarker([p.lat, p.lon], {
-      color: getColor(p.animalId), radius: 10, weight: 2, opacity: 0.95
-    }).bindPopup(
-      `<b>${p.animalId}</b><br>${p.date||'—'} ${p.time||'—'}<br>${p.lat.toFixed(5)}, ${p.lon.toFixed(5)}`
-    ).addTo(markersLayer);
-  });
-  if (points.length) {
-    map.fitBounds(L.latLngBounds(points.map(p => [p.lat, p.lon])).pad(0.2));
-  }
-}
+    // Robust Date Parser
+    function parseDate(dateStr) {
+        if (!dateStr) return null;
+        
+        // Format A: M/D/YYYY H:M:S
+        if (dateStr.includes('/')) {
+            const [datePart, timePart] = dateStr.split(' ');
+            const [m, d, y] = datePart.split('/');
+            return new Date(y, m - 1, d, ...(timePart ? timePart.split(':') : []));
+        }
+        
+        // Format B: D-M-YYYY H:M
+        if (dateStr.includes('-')) {
+            const [datePart, timePart] = dateStr.split(' ');
+            const [d, m, y] = datePart.split('-');
+            return new Date(y, m - 1, d, ...(timePart ? timePart.split(':') : []));
+        }
+        
+        return new Date(dateStr);
+    }
 
-function renderTable(points) {
-  const tbody = document.querySelector("#data-table tbody");
-  const visiblePoints = points.slice(0, currentViewCount);
-  tbody.innerHTML = visiblePoints.map((p, idx) => `
-    <tr>
-      <td>${p.animalId}</td>
-      <td class="clickable-date" data-index="${idx}">${p.date || '—'}</td>
-      <td>${p.time || '—'}</td>
-      <td>${p.lat.toFixed(5)}</td>
-      <td>${p.lon.toFixed(5)}</td>
-    </tr>
-  `).join('');
+    async function loadData() {
+        try {
+            const response = await fetch(SHEET_URL);
+            const csvText = await response.text();
+            const rows = csvText.split('\n').filter(r => r.trim() !== '');
+            const headers = rows[0].split(',');
 
-  tbody.querySelectorAll('.clickable-date').forEach(cell => {
-    cell.style.cursor = 'pointer';
-    cell.style.textDecoration = 'underline';
-    cell.addEventListener('click', () => {
-      const point = points[cell.dataset.index];
-      if (point) {
-        markersLayer.eachLayer(layer => {
-          if (layer.getLatLng &&
-              layer.getLatLng().lat.toFixed(5) == point.lat.toFixed(5) &&
-              layer.getLatLng().lng.toFixed(5) == point.lon.toFixed(5)) {
-            map.setView(layer.getLatLng(), 14, { animate: true });
-            layer.openPopup();
-          }
+            allData = rows.slice(1).map(row => {
+                const cols = row.split(',');
+                return {
+                    id: cols[0].trim(),
+                    timestamp: parseDate(cols[1].trim()),
+                    lat: parseFloat(cols[2]),
+                    lon: parseFloat(cols[3]),
+                    place: cols[4],
+                    activity: cols[5],
+                    signal: cols[6],
+                    remarks: cols[7]
+                };
+            }).filter(d => !isNaN(d.lat) && d.timestamp instanceof Date && !isNaN(d.timestamp));
+
+            populateDropdown();
+            showLatestLocations();
+        } catch (e) {
+            console.error("Load failed", e);
+        }
+    }
+
+    function populateDropdown() {
+        const select = document.getElementById('animalSelect');
+        const ids = [...new Set(allData.map(d => d.id))].sort((a,b) => a - b);
+        ids.forEach(id => {
+            const opt = document.createElement('option');
+            opt.value = id;
+            opt.textContent = `Hatchling ${id}`;
+            select.appendChild(opt);
         });
-      }
+    }
+
+    function createMarkerIcon(id) {
+        return L.divIcon({
+            className: 'custom-div-icon',
+            html: `<div class="marker-id">${id}</div>`,
+            iconSize: [30, 20],
+            iconAnchor: [15, 10]
+        });
+    }
+
+    // Default State: Latest for all
+    function showLatestLocations() {
+        markersLayer.clearLayers();
+        trackLayer.clearLayers();
+        document.getElementById('details-view').classList.add('hidden');
+
+        const latestMap = new Map();
+        allData.forEach(d => {
+            if (!latestMap.has(d.id) || d.timestamp > latestMap.get(d.id).timestamp) {
+                latestMap.set(d.id, d);
+            }
+        });
+
+        const latestPoints = Array.from(latestMap.values());
+        const coordCount = {};
+
+        latestPoints.forEach(d => {
+            // Jitter for overlapping points
+            let lat = d.lat, lon = d.lon;
+            const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+            if (coordCount[key]) {
+                lat += (Math.random() - 0.5) * 0.0003;
+                lon += (Math.random() - 0.5) * 0.0003;
+            }
+            coordCount[key] = true;
+
+            const m = L.marker([lat, lon], { icon: createMarkerIcon(d.id) });
+            m.bindPopup(`<div class="popup-title">ID: ${d.id} (Latest)</div>
+                         Time: ${d.timestamp.toLocaleString()}<br>
+                         Place: ${d.place}<br>
+                         Activity: ${d.activity}`);
+            markersLayer.addLayer(m);
+        });
+
+        if (latestPoints.length > 0) map.fitBounds(markersLayer.getBounds(), {padding: [30, 30]});
+    }
+
+    function showAnimalTrack(id) {
+        markersLayer.clearLayers();
+        trackLayer.clearLayers();
+        const details = document.getElementById('details-view');
+        details.classList.remove('hidden');
+
+        // Filter and sort
+        const animalData = allData.filter(d => d.id === id);
+        // Track: Oldest to Newest for drawing line
+        const chronological = [...animalData].sort((a,b) => a.timestamp - b.timestamp);
+        // Table: Newest to Oldest for display
+        const reverseChrono = [...animalData].sort((a,b) => b.timestamp - a.timestamp);
+
+        // Draw Polyline
+        const path = chronological.map(d => [d.lat, d.lon]);
+        const poly = L.polyline(path, { color: 'yellow', weight: 4, opacity: 0.8 }).addTo(trackLayer);
+
+        // Add Markers with Jitter
+        const coordCount = {};
+        chronological.forEach((d, idx) => {
+            let lat = d.lat, lon = d.lon;
+            const key = `${lat.toFixed(6)},${lon.toFixed(6)}`;
+            if (coordCount[key]) {
+                lat += (Math.random() - 0.5) * 0.0001;
+                lon += (Math.random() - 0.5) * 0.0001;
+            }
+            coordCount[key] = true;
+
+            const m = L.marker([lat, lon], { icon: createMarkerIcon(d.id) });
+            m.bindPopup(`<div class="popup-title">ID: ${d.id} (#${idx+1})</div>
+                         Time: ${d.timestamp.toLocaleString()}<br>
+                         Place: ${d.place}<br>
+                         Activity: ${d.activity}<br>
+                         Signal: ${d.signal}`);
+            markersLayer.addLayer(m);
+        });
+
+        updateStats(chronological);
+        updateTable(reverseChrono);
+        map.fitBounds(poly.getBounds(), { padding: [50, 50] });
+    }
+
+    function updateStats(data) {
+        const entries = data.length;
+        const days = new Set(data.map(d => d.timestamp.toDateString())).size;
+        
+        let distance = 0;
+        for (let i = 0; i < data.length - 1; i++) {
+            const p1 = L.latLng(data[i].lat, data[i].lon);
+            const p2 = L.latLng(data[i+1].lat, data[i+1].lon);
+            distance += p1.distanceTo(p2);
+        }
+
+        document.getElementById('stat-entries').textContent = entries;
+        document.getElementById('stat-days').textContent = days;
+        document.getElementById('stat-dist').textContent = `${(distance / 1000).toFixed(2)} km`;
+    }
+
+    function updateTable(data) {
+        const tbody = document.getElementById('table-body');
+        tbody.innerHTML = '';
+        data.forEach(d => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                <td>${d.timestamp.toLocaleString([], {month:'numeric', day:'numeric', hour:'2-digit', minute:'2-digit'})}</td>
+                <td>${d.place}</td>
+                <td>${d.activity}</td>
+                <td>${d.signal}</td>
+            `;
+        });
+    }
+
+    document.getElementById('animalSelect').addEventListener('change', e => {
+        if (e.target.value === 'ALL') {
+            showLatestLocations();
+        } else {
+            showAnimalTrack(e.target.value);
+        }
     });
-  });
 
-  document.getElementById('viewMore').style.display = (points.length > currentViewCount) ? 'inline-block' : 'none';
-}
-
-document.getElementById('viewMore').addEventListener('click', () => {
-  currentViewCount += 50;
-  applyFilter();
-});
-
-function applyFilter() {
-  const animalSel = document.getElementById('animalFilter').value;
-  const from = document.getElementById('fromDate').value;
-  const to = document.getElementById('toDate').value;
-  let filtered = allPoints.filter(p => {
-    if (animalSel !== 'all' && p.animalId !== animalSel) return false;
-    if (from && (!p.date || p.date < from)) return false;
-    if (to && (!p.date || p.date > to)) return false;
-    return true;
-  });
-  filtered.sort((a, b) =>
-    ((b.date || '') + (b.time || '')).localeCompare((a.date || '') + (a.time || ''))
-  );
-  renderMap(filtered);
-  renderTable(filtered);
-}
-
-function handleKMLtext(kmlString, filename) {
-  const xml = new DOMParser().parseFromString(kmlString, "application/xml");
-  const placemarks = Array.from(xml.getElementsByTagName('*'))
-    .filter(node => (node.localName || node.nodeName) === 'Placemark');
-  const serial = getSerialFromFilename(filename);
-  const mappedId = animalIdMapping[serial];
-  const animalId = mappedId || serial || 'Unknown';
-  const fileDT = parseFilenameForDateTime(filename);
-
-  placemarks.forEach(pm => {
-    const nameText = getFirstTextByLocalName(pm, 'name');
-    const coords = getLonLat(pm);
-    if (!coords) return;
-    let dt = parsePlacemarkDateTime(pm, nameText);
-    if (!dt && fileDT) dt = fileDT;
-    allPoints.push({
-      animalId,
-      date: dt ? dt.date : null,
-      time: dt ? dt.time : null,
-      lat: coords.lat,
-      lon: coords.lon
-    });
-  });
-}
-
-function handleFiles(files) {
-  const status = document.getElementById('status');
-  status.textContent = `Loading ${files.length} file(s)...`;
-  currentViewCount = 10;
-  let loaded = 0;
-  Array.from(files).forEach(file => {
-    const reader = new FileReader();
-    reader.onload = e => {
-      handleKMLtext(e.target.result, file.name);
-      loaded++;
-      if (loaded === files.length) {
-        updateAnimalFilterOptions();
-        applyFilter();
-        status.textContent = `Loaded: ${Array.from(files).map(f => f.name).join(', ')}`;
-      }
-    };
-    reader.readAsText(file);
-  });
-}
-
-function exportCSV(points) {
-  const header = ['Animal ID','Date','Time','Lat','Lon'];
-  const rows = points.map(p => [p.animalId, p.date, p.time, p.lat, p.lon]);
-  const csv = [header, ...rows].map(r => r.join(',')).join('\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'gharial-data.csv';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-document.getElementById('dropzone').addEventListener('click', () => document.getElementById('fileInput').click());
-document.getElementById('dropzone').addEventListener('dragover', e => { e.preventDefault(); dropzone.style.background = '#eef'; });
-document.getElementById('dropzone').addEventListener('dragleave', e => { e.preventDefault(); dropzone.style.background = ''; });
-document.getElementById('dropzone').addEventListener('drop', e => {
-  e.preventDefault();
-  dropzone.style.background = '';
-  handleFiles(e.dataTransfer.files);
-});
-document.getElementById('fileInput').addEventListener('change', e => handleFiles(e.target.files));
-document.getElementById('applyFilter').addEventListener('click', applyFilter);
-document.getElementById('clearData').addEventListener('click', () => {
-  allPoints = [];
-  currentViewCount = 10;
-  markersLayer.clearLayers();
-  document.querySelector("#data-table tbody").innerHTML = '';
-  document.getElementById('animalFilter').innerHTML = '<option value="all">All</option>';
-  document.getElementById('status').textContent = '';
-});
-document.getElementById('exportCSV').addEventListener('click', () => exportCSV(allPoints));
+    loadData();
 </script>
+
 </body>
 </html>
