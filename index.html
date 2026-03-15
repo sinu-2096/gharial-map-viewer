@@ -4,46 +4,147 @@
 <meta charset="UTF-8">
 <title>Pali FT Hatchlings Telemetry Dashboard</title>
 
-<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
 
-<script src="config.js"></script>
-<script src="markers.js"></script>
-<script src="analytics.js"></script>
-<script src="heatmap.js"></script>
-<script src="survival.js"></script>
-<script src="corridors.js"></script>
-<script src="updates.js"></script>
-<script src="dashboard.js"></script>
+<style>
+
+body{
+margin:0;
+font-family:Segoe UI;
+background:#0d1117;
+color:white;
+}
+
+/* HEADER */
+
+header{
+height:70px;
+background:#111;
+display:flex;
+align-items:center;
+justify-content:center;
+position:relative;
+border-bottom:1px solid #222;
+}
+
+header h1{
+font-size:20px;
+font-weight:600;
+}
+
+.logo-left img{
+position:absolute;
+left:20px;
+height:45px;
+}
+
+.logo-right img{
+position:absolute;
+right:20px;
+height:45px;
+}
+
+/* CONTROLS */
+
+.top-panel{
+display:flex;
+gap:20px;
+align-items:center;
+padding:10px 25px;
+background:#161b22;
+border-bottom:1px solid #30363d;
+}
+
+select{
+padding:6px 10px;
+background:#0d1117;
+border:1px solid #30363d;
+color:white;
+}
+
+.status-dot{
+width:8px;
+height:8px;
+background:#2ecc71;
+border-radius:50%;
+animation:blink 2s infinite;
+}
+
+@keyframes blink{
+0%{opacity:1}
+50%{opacity:.2}
+100%{opacity:1}
+}
+
+/* MAP */
+
+.map-container{
+padding:20px;
+}
+
+#map{
+height:70vh;
+border-radius:10px;
+box-shadow:0 10px 30px rgba(0,0,0,0.4);
+}
+
+/* TABLE */
+
+.table-container{
+padding:20px;
+}
+
+table{
+width:100%;
+border-collapse:collapse;
+}
+
+th{
+background:#161b22;
+padding:10px;
+text-align:left;
+}
+
+td{
+padding:8px;
+border-bottom:1px solid #222;
+}
+
+tr:hover{
+background:#161b22;
+}
+
+</style>
 </head>
 
 <body>
 
 <header>
 
-<img src="unnamed.png" class="logo-left">
+<div class="logo-left">
+<img src="unnamed.png">
+</div>
 
 <h1>Pali FT Hatchlings Telemetry Dashboard</h1>
 
-<img src="image.png" class="logo-right">
+<div class="logo-right">
+<img src="image.png">
+</div>
 
 </header>
-<div class="controls">
+
+<div class="top-panel">
 
 <select id="animalFilter">
 <option value="all">All Hatchlings</option>
 </select>
 
-<div class="hint">
-Select hatchling to view movement track
-</div>
-
-<div class="telemetry-status">
-<span class="dot"></span>
+<div id="status">
+<span class="status-dot"></span>
 <span id="statusText">Loading telemetry...</span>
 </div>
 
@@ -51,15 +152,13 @@ Select hatchling to view movement track
 
 </div>
 
-<div id="movementPanel"></div>
-
+<div class="map-container">
 <div id="map"></div>
+</div>
 
-<div id="analyticsPanel"></div>
-
-<div id="survivalPanel"></div>
-
+<div class="table-container">
 <table id="dataTable">
+
 <thead>
 <tr>
 <th>Animal ID</th>
@@ -72,13 +171,161 @@ Select hatchling to view movement track
 <th>Remarks</th>
 </tr>
 </thead>
-<tbody></tbody>
-</table>
 
-<div id="updatesPanel">
-<button onclick="closeUpdates()">Close</button>
-<div id="updatesContent"></div>
+<tbody></tbody>
+
+</table>
 </div>
+
+<script>
+
+/* GOOGLE SHEET CSV SOURCES */
+
+const CSV_URL =
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-f3JOwQZSlcBmpp4JO_Owut9JogW7KZYfJj5PONOc1TXE73xjvypZ1w6mWvvNzjFTaShiR6oYtzdt/pub?gid=0&single=true&output=csv";
+
+const UPDATES_URL =
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-f3JOwQZSlcBmpp4JO_Owut9JogW7KZYfJj5PONOc1TXE73xjvypZ1w6mWvvNzjFTaShiR6oYtzdt/pub?gid=238985281&single=true&output=csv";
+
+/* MAP */
+
+let map = L.map("map").setView([25.84,76.56],13);
+
+L.tileLayer(
+"http://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
+).addTo(map);
+
+let oms = new OverlappingMarkerSpiderfier(map);
+
+let markers = L.layerGroup().addTo(map);
+
+let animals = {};
+
+/* LOAD DATA */
+
+Papa.parse(CSV_URL,{
+download:true,
+header:true,
+complete:function(results){
+
+console.log("Loaded rows:",results.data);
+
+processData(results.data);
+
+}
+});
+
+/* PROCESS DATA */
+
+function processData(data){
+
+data.forEach(row=>{
+
+let id=row["Animal ID"];
+
+if(!id) return;
+
+if(!animals[id]) animals[id]=[];
+
+animals[id].push(row);
+
+});
+
+populateDropdown();
+
+renderMap("all");
+
+renderTable("all");
+
+}
+
+/* DROPDOWN */
+
+function populateDropdown(){
+
+let select=document.getElementById("animalFilter");
+
+Object.keys(animals).forEach(id=>{
+
+let option=document.createElement("option");
+
+option.value=id;
+option.textContent=id;
+
+select.appendChild(option);
+
+});
+
+}
+
+/* MAP */
+
+function renderMap(selected){
+
+markers.clearLayers();
+
+Object.keys(animals).forEach(id=>{
+
+let record=animals[id][0];
+
+let lat=parseFloat(record.Latitude);
+let lon=parseFloat(record.Longitude);
+
+if(!lat||!lon) return;
+
+let marker=L.circleMarker([lat,lon],{
+radius:8,
+color:"cyan"
+});
+
+marker.bindPopup(`
+<b>ID:</b> ${id}<br>
+<b>Time:</b> ${record.Timestamp}<br>
+<b>Place:</b> ${record.Place}
+`);
+
+marker.addTo(markers);
+
+oms.addMarker(marker);
+
+});
+
+}
+
+/* TABLE */
+
+function renderTable(){
+
+let tbody=document.querySelector("#dataTable tbody");
+
+tbody.innerHTML="";
+
+Object.keys(animals).forEach(id=>{
+
+let r=animals[id][0];
+
+let row=document.createElement("tr");
+
+row.innerHTML=`
+
+<td>${id}</td>
+<td>${r.Timestamp}</td>
+<td>${r.Place}</td>
+<td>${r.Activity}</td>
+<td>${r["Signal Strength"]}</td>
+<td>${r.Latitude}</td>
+<td>${r.Longitude}</td>
+<td>${r.Remarks}</td>
+
+`;
+
+tbody.appendChild(row);
+
+});
+
+}
+
+</script>
 
 </body>
 </html>
