@@ -8,40 +8,72 @@
 
 <style>
 
-body{
-margin:0;
-font-family:Arial,Helvetica,sans-serif;
-background:#f4f6f9;
+:root{
+--map-height:70vh;
+--primary-bg:#f4f6f9;
+--header-bg:#2c3e50;
+--text-color:#333;
+--border-color:#ccc;
 }
+
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+font-family:'Segoe UI',sans-serif;
+}
+
+body{
+background:var(--primary-bg);
+display:flex;
+flex-direction:column;
+min-height:100vh;
+}
+
+/* HEADER */
 
 header{
 background:#2c3e50;
 color:white;
-padding:10px 20px;
-display:flex;
+padding:12px 20px;
+display:grid;
+grid-template-columns:auto auto 1fr;
 align-items:center;
-gap:15px;
+gap:12px;
 }
 
 header img{
-height:40px;
+height:42px;
 }
 
 header h1{
-flex:1;
 text-align:center;
-font-size:20px;
-margin:0;
+font-size:1.5rem;
 }
+
+/* PANEL */
 
 .top-panel{
 background:white;
-padding:10px 20px;
+padding:12px 20px;
 border-bottom:1px solid #ccc;
 display:flex;
 align-items:center;
-gap:20px;
+gap:25px;
+flex-wrap:wrap;
 }
+
+.filter-group{
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.filter-group select{
+padding:7px 10px;
+}
+
+/* MAP */
 
 .map-container{
 height:70vh;
@@ -49,73 +81,108 @@ height:70vh;
 
 #map{
 height:100%;
-width:100%;
 }
+
+/* TABLE */
 
 .table-container{
-background:white;
 padding:20px;
+background:white;
+overflow-x:auto;
 }
 
-.telemetry-table{
+table{
 width:100%;
 border-collapse:collapse;
-font-size:14px;
 }
 
-.telemetry-table th,
-.telemetry-table td{
-padding:8px 10px;
+th{
+background:#2c3e50;
+color:white;
+padding:10px;
+}
+
+td{
+padding:8px;
 border-bottom:1px solid #ddd;
 }
 
-.telemetry-table th{
-background:#2c3e50;
-color:white;
+tr:hover{
+background:#eef3f8;
+cursor:pointer;
 }
 
+/* MARKERS */
+
 .animal-marker{
+border-radius:50%;
 width:28px;
 height:28px;
-border-radius:50%;
 display:flex;
 align-items:center;
 justify-content:center;
 color:white;
 font-weight:bold;
+font-size:12px;
 border:2px solid white;
-box-shadow:0 0 4px rgba(0,0,0,0.5);
-}
-
-.marker-blue{
+box-shadow:0 0 6px rgba(0,0,0,0.5);
 background:#007bff;
 }
 
-.marker-red{
-background:#dc3545;
+.dead-marker{
+background:#d93025;
 }
+
+.star-marker{
+font-size:18px;
+}
+
+/* FIELD PANEL */
 
 .field-panel{
 position:fixed;
 top:0;
-right:-350px;
-width:350px;
+right:-360px;
+width:360px;
 height:100%;
 background:white;
-box-shadow:-3px 0 10px rgba(0,0,0,0.2);
-padding:20px;
+box-shadow:-4px 0 10px rgba(0,0,0,0.25);
 transition:right 0.3s;
-overflow:auto;
+z-index:999;
+display:flex;
+flex-direction:column;
 }
 
 .field-panel.open{
 right:0;
 }
 
-.close-btn{
-cursor:pointer;
-font-size:18px;
+.field-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+padding:12px;
+border-bottom:1px solid #ddd;
 font-weight:bold;
+}
+
+.field-controls button{
+border:none;
+background:none;
+font-size:18px;
+cursor:pointer;
+margin-left:8px;
+}
+
+.field-body{
+padding:15px;
+overflow:auto;
+}
+
+.update-select{
+margin-top:12px;
+width:100%;
+padding:6px;
 }
 
 </style>
@@ -126,20 +193,19 @@ font-weight:bold;
 <header>
 <img src="image.png">
 <img src="unnamed.png">
-<h1>Pali FT Hatchlings Telemetry Dashboard</h1>
+<h1>🐊 Pali FT Hatchlings Telemetry Dashboard</h1>
 </header>
 
 <div class="top-panel">
 
+<div class="filter-group">
 <label>Select Animal</label>
-
 <select id="animalFilter">
 <option value="all">All Animals</option>
 </select>
+</div>
 
 <button onclick="toggleFieldPanel()">Field Updates</button>
-
-<div id="statusBar">Latest Telemetry: loading...</div>
 
 </div>
 
@@ -149,53 +215,63 @@ font-weight:bold;
 
 <div class="table-container">
 
-<table class="telemetry-table" id="dataTable">
-
+<table id="dataTable">
 <thead>
 <tr>
 <th>Animal ID</th>
 <th>Timestamp</th>
 <th>Place</th>
 <th>Activity</th>
-<th>Signal Strength</th>
+<th>Signal</th>
 <th>Latitude</th>
 <th>Longitude</th>
 <th>Remarks</th>
 </tr>
 </thead>
-
 <tbody></tbody>
-
 </table>
 
 </div>
 
 <div class="field-panel" id="fieldPanel">
 
-<div style="display:flex;justify-content:space-between;">
-<h3>Field Updates</h3>
-<div class="close-btn" onclick="toggleFieldPanel()">✕</div>
+<div class="field-header">
+Field Updates
+<div class="field-controls">
+<button onclick="minimizePanel()">–</button>
+<button onclick="toggleFieldPanel()">✕</button>
+</div>
 </div>
 
-<div id="fieldUpdatesList"></div>
+<div class="field-body">
+
+<div id="latestUpdate"></div>
+
+<select id="previousUpdates" class="update-select"></select>
+
+</div>
 
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
 
 <script>
 
 const CSV_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=0';
-
 const UPDATE_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=238985281';
 
-const DEAD_IDS=['30','33','34','38','96','64','98'];
+const DEAD_IDS=[30,33,34,38,64,96,98];
 
 let map;
+let oms;
+
 let rawData=[];
 let animalsData={};
+let latestRecords={};
 let markers=[];
+let markerMapping={};
 
 function init(){
 
@@ -206,11 +282,17 @@ L.tileLayer(
 {maxZoom:20}
 ).addTo(map);
 
-loadTelemetry();
-loadFieldUpdates();
+oms=new OverlappingMarkerSpiderfier(map,{
+keepSpiderfied:true,
+circleSpiralSwitchover:6,
+legWeight:2
+});
 
-document.getElementById("animalFilter")
-.addEventListener("change",e=>renderMap(e.target.value));
+loadTelemetry();
+loadUpdates();
+
+document.getElementById('animalFilter')
+.addEventListener('change',e=>updateDashboard(e.target.value));
 
 }
 
@@ -226,9 +308,7 @@ rawData=results.data;
 
 processData();
 populateDropdown();
-renderMap("all");
-renderTable("all");
-updateStatus();
+updateDashboard('all');
 
 }
 });
@@ -239,123 +319,212 @@ function processData(){
 
 animalsData={};
 
-rawData.forEach(row=>{
+rawData.forEach(r=>{
 
-let id=row["Animal ID"];
-
+let id=r['Animal ID'];
 if(!id) return;
 
 if(!animalsData[id]) animalsData[id]=[];
 
-animalsData[id].push(row);
+r.parsedDate=new Date(r.Timestamp);
+
+animalsData[id].push(r);
 
 });
+
+for(let id in animalsData){
+
+animalsData[id].sort((a,b)=>b.parsedDate-a.parsedDate);
+
+latestRecords[id]=animalsData[id][0];
+
+}
 
 }
 
 function populateDropdown(){
 
-let select=document.getElementById("animalFilter");
+let sel=document.getElementById('animalFilter');
 
-Object.keys(animalsData).sort((a,b)=>a-b).forEach(id=>{
-
-let option=document.createElement("option");
-
-option.value=id;
-option.textContent=id;
-
-select.appendChild(option);
-
+Object.keys(animalsData).forEach(id=>{
+let o=document.createElement('option');
+o.value=id;
+o.textContent=id;
+sel.appendChild(o);
 });
 
 }
 
-function renderMap(selected){
+function clearMap(){
 
 markers.forEach(m=>map.removeLayer(m));
-
 markers=[];
-
-let data=[];
-
-if(selected==="all"){
-
-Object.values(animalsData).forEach(arr=>data.push(arr[0]));
-
-}else{
-
-data=animalsData[selected]||[];
+markerMapping={};
 
 }
 
-data.forEach(r=>{
+function updateDashboard(id){
+
+clearMap();
+renderMap(id);
+renderTable(id);
+
+}
+
+function renderMap(selectedId){
+
+if(selectedId==='all'){
+
+for(let id in latestRecords){
+addMarker(latestRecords[id]);
+}
+
+}
+else{
+
+let rec=animalsData[selectedId];
+
+let latlngs=[];
+
+for(let i=rec.length-1;i>=0;i--){
+
+let r=rec[i];
+
+addMarker(r);
+
+latlngs.push([r.Latitude,r.Longitude]);
+
+}
+
+L.polyline(latlngs,{color:'#ffc107',weight:3}).addTo(map);
+
+addReleaseMarker(rec[rec.length-1]);
+
+computeAnalytics(selectedId);
+
+}
+
+}
+
+function addMarker(r){
+
+let id=parseInt(r['Animal ID']);
 
 let lat=parseFloat(r.Latitude);
 let lng=parseFloat(r.Longitude);
 
 if(isNaN(lat)||isNaN(lng)) return;
 
-let id=r["Animal ID"];
+let className='animal-marker';
 
-let color=DEAD_IDS.includes(id)?"marker-red":"marker-blue";
+if(DEAD_IDS.includes(id)) className+=' dead-marker';
 
 let icon=L.divIcon({
-className:"animal-marker "+color,
-html:id
+className:className,
+html:id,
+iconSize:[28,28]
 });
 
-let marker=L.marker([lat,lng],{icon}).addTo(map);
+let m=L.marker([lat,lng],{icon}).addTo(map);
 
-marker.bindPopup(
-
-"<b>Animal ID:</b> "+r["Animal ID"]+
-"<br><b>Timestamp:</b> "+r["Timestamp"]+
-"<br><b>Place:</b> "+r["Place"]+
-"<br><b>Activity:</b> "+r["Activity"]+
-"<br><b>Signal Strength:</b> "+(r["Signal Stength"]||"")+
-"<br><b>Latitude:</b> "+r["Latitude"]+
-"<br><b>Longitude:</b> "+r["Longitude"]+
-"<br><b>Remarks:</b> "+(r["Remarks"]||"")
-
+m.bindPopup(
+"<b>ID:</b> "+r['Animal ID']+
+"<br><b>Time:</b> "+r['Timestamp']+
+"<br><b>Place:</b> "+r['Place']+
+"<br><b>Activity:</b> "+r['Activity']+
+"<br><b>Signal:</b> "+r['Signal Stength']+
+"<br><b>Lat:</b> "+r['Latitude']+
+"<br><b>Lng:</b> "+r['Longitude']+
+"<br><b>Remarks:</b> "+(r['Remarks']||'')
 );
 
-markers.push(marker);
+markers.push(m);
+oms.addMarker(m);
 
+markerMapping[id+"_"+r['Timestamp']]=m;
+
+}
+
+function addReleaseMarker(r){
+
+let icon=L.divIcon({
+className:'star-marker',
+html:'⭐'
 });
 
-}
-
-function renderTable(selected){
-
-let tbody=document.querySelector("#dataTable tbody");
-
-tbody.innerHTML="";
-
-let data=[];
-
-if(selected==="all"){
-
-Object.values(animalsData).forEach(arr=>data.push(arr[0]));
-
-}else{
-
-data=animalsData[selected]||[];
+L.marker([r.Latitude,r.Longitude],{icon})
+.addTo(map)
+.bindPopup("Release Site");
 
 }
+
+function haversine(a,b){
+
+let R=6371000;
+
+let lat1=a[0]*Math.PI/180;
+let lat2=b[0]*Math.PI/180;
+
+let dlat=(b[0]-a[0])*Math.PI/180;
+let dlon=(b[1]-a[1])*Math.PI/180;
+
+let x=Math.sin(dlat/2)**2+
+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
+
+let c=2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+
+return R*c;
+
+}
+
+function computeAnalytics(id){
+
+let rec=animalsData[id];
+
+if(rec.length<10) return;
+
+let last10=rec.slice(0,10);
+
+let center=[last10[0].Latitude,last10[0].Longitude];
+
+let max=0;
+
+last10.forEach(r=>{
+let d=haversine(center,[r.Latitude,r.Longitude]);
+if(d>max) max=d;
+});
+
+let type="Settler";
+
+if(max>300 && max<=1500) type="Explorer";
+if(max>1500) type="Disperser";
+
+console.log("ID",id,type);
+
+}
+
+function renderTable(selectedId){
+
+let tbody=document.querySelector('#dataTable tbody');
+tbody.innerHTML='';
+
+let data=(selectedId==='all') ?
+Object.values(latestRecords) :
+animalsData[selectedId];
 
 data.forEach(r=>{
 
-let tr=document.createElement("tr");
+let tr=document.createElement('tr');
 
 tr.innerHTML=`
-<td>${r["Animal ID"]}</td>
-<td>${r["Timestamp"]}</td>
-<td>${r["Place"]}</td>
-<td>${r["Activity"]}</td>
-<td>${r["Signal Stength"]||""}</td>
-<td>${r["Latitude"]}</td>
-<td>${r["Longitude"]}</td>
-<td>${r["Remarks"]||""}</td>
+<td>${r['Animal ID']}</td>
+<td>${r['Timestamp']}</td>
+<td>${r['Place']}</td>
+<td>${r['Activity']}</td>
+<td>${r['Signal Stength']}</td>
+<td>${r['Latitude']}</td>
+<td>${r['Longitude']}</td>
+<td>${r['Remarks']||''}</td>
 `;
 
 tbody.appendChild(tr);
@@ -364,38 +533,28 @@ tbody.appendChild(tr);
 
 }
 
-function updateStatus(){
-
-let latest=rawData
-.map(r=>r.Timestamp)
-.sort()
-.reverse()[0];
-
-document.getElementById("statusBar").innerText=
-"Latest Telemetry: "+latest;
-
-}
-
-function loadFieldUpdates(){
+function loadUpdates(){
 
 Papa.parse(UPDATE_URL,{
 download:true,
 header:true,
-skipEmptyLines:true,
-complete:function(results){
+complete:function(res){
 
-let container=document.getElementById("fieldUpdatesList");
+let rows=res.data;
 
-results.data.reverse().forEach(r=>{
+rows.sort((a,b)=>new Date(b.Date)-new Date(a.Date));
 
-if(!r.Date) return;
+let latest=rows[0];
 
-let div=document.createElement("div");
+document.getElementById('latestUpdate')
+.innerHTML="<b>"+latest.Date+"</b><br>"+latest.Update;
 
-div.innerHTML="<b>"+r.Date+"</b><br>"+r.Update;
+let select=document.getElementById('previousUpdates');
 
-container.appendChild(div);
-
+rows.forEach(r=>{
+let opt=document.createElement('option');
+opt.textContent=r.Date+" - "+r.Update;
+select.appendChild(opt);
 });
 
 }
@@ -405,11 +564,19 @@ container.appendChild(div);
 
 function toggleFieldPanel(){
 
-document.getElementById("fieldPanel").classList.toggle("open");
+document.getElementById('fieldPanel')
+.classList.toggle('open');
 
 }
 
-document.addEventListener("DOMContentLoaded",init);
+function minimizePanel(){
+
+document.getElementById('fieldPanel')
+.style.right="-320px";
+
+}
+
+document.addEventListener('DOMContentLoaded',init);
 
 </script>
 
