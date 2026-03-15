@@ -1,23 +1,12 @@
-const CONFIG = {
+const CONFIG={
 
 CSV_URL:
-"https://docs.google.com/spreadsheets/d/10maxgDHDOIS/export?format=csv&gid=0",
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-f3JOwQZSlcBmpp4JO_Owut9JogW7KZYfJj5PONOc1TXE73xjvypZ1w6mWvvNzjFTaShiR6oYtzdt/pub?gid=0&single=true&output=csv",
 
-UPDATES_CSV_URL:
-"https://docs.google.com/spreadsheets/d/10maxgDHDOIS/export?format=csv&gid=1",
+UPDATES_URL:
+"https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-f3JOwQZSlcBmpp4JO_Owut9JogW7KZYfJj5PONOc1TXE73xjvypZ1w6mWvvNzjFTaShiR6oYtzdt/pub?gid=238985281&single=true&output=csv",
 
 MAP_CENTER:[25.84,76.56],
-MAP_ZOOM:13,
-
-DEFAULT_ROWS:5,
-
-RED_IDS:[
-30,33,34,38,64,96,98
-],
-
-RECENT_MOVEMENT_METERS:300,
-
-SETTLER_RADIUS_METERS:300,
-EXPLORER_RADIUS_METERS:1500
+MAP_ZOOM:13
 
 };
