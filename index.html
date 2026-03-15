@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,63 +15,65 @@
 
 body{
 margin:0;
-font-family:Segoe UI;
-background:#0d1117;
-color:white;
+font-family:Segoe UI,Arial;
+background:#f4f6f9;
+color:#333;
 }
 
 /* HEADER */
 
 header{
 height:70px;
-background:#111;
+background:#2c3e50;
+color:white;
 display:flex;
 align-items:center;
 justify-content:center;
 position:relative;
-border-bottom:1px solid #222;
+box-shadow:0 2px 6px rgba(0,0,0,0.2);
 }
 
 header h1{
 font-size:20px;
-font-weight:600;
+margin:0;
 }
 
 .logo-left img{
 position:absolute;
 left:20px;
-height:45px;
+max-height:40px;
 }
 
 .logo-right img{
 position:absolute;
 right:20px;
-height:45px;
+max-height:40px;
 }
 
 /* CONTROLS */
 
 .top-panel{
 display:flex;
-gap:20px;
 align-items:center;
-padding:10px 25px;
-background:#161b22;
-border-bottom:1px solid #30363d;
+gap:15px;
+padding:10px 20px;
+background:white;
+border-bottom:1px solid #ddd;
 }
 
 select{
 padding:6px 10px;
-background:#0d1117;
-border:1px solid #30363d;
-color:white;
+border:1px solid #ccc;
+border-radius:4px;
 }
 
 .status-dot{
 width:8px;
 height:8px;
-background:#2ecc71;
+background:#27ae60;
 border-radius:50%;
+display:inline-block;
+margin-right:5px;
 animation:blink 2s infinite;
 }
 
@@ -78,6 +81,15 @@ animation:blink 2s infinite;
 0%{opacity:1}
 50%{opacity:.2}
 100%{opacity:1}
+}
+
+button{
+padding:6px 12px;
+background:#27ae60;
+border:none;
+color:white;
+border-radius:4px;
+cursor:pointer;
 }
 
 /* MAP */
@@ -88,8 +100,8 @@ padding:20px;
 
 #map{
 height:70vh;
-border-radius:10px;
-box-shadow:0 10px 30px rgba(0,0,0,0.4);
+border-radius:8px;
+box-shadow:0 5px 15px rgba(0,0,0,0.2);
 }
 
 /* TABLE */
@@ -101,21 +113,48 @@ padding:20px;
 table{
 width:100%;
 border-collapse:collapse;
+background:white;
 }
 
 th{
-background:#161b22;
+background:#2c3e50;
+color:white;
 padding:10px;
 text-align:left;
 }
 
 td{
 padding:8px;
-border-bottom:1px solid #222;
+border-bottom:1px solid #eee;
 }
 
 tr:hover{
-background:#161b22;
+background:#f1f1f1;
+}
+
+/* UPDATES PANEL */
+
+#updatesPanel{
+position:fixed;
+right:-350px;
+top:0;
+width:350px;
+height:100%;
+background:white;
+box-shadow:-5px 0 20px rgba(0,0,0,0.2);
+transition:0.3s;
+padding:20px;
+overflow-y:auto;
+}
+
+#updatesPanel.open{
+right:0;
+}
+
+.update-item{
+margin-bottom:15px;
+border-left:3px solid #27ae60;
+padding-left:10px;
 }
 
 </style>
@@ -143,7 +182,7 @@ background:#161b22;
 <option value="all">All Hatchlings</option>
 </select>
 
-<div id="status">
+<div>
 <span class="status-dot"></span>
 <span id="statusText">Loading telemetry...</span>
 </div>
@@ -157,6 +196,7 @@ background:#161b22;
 </div>
 
 <div class="table-container">
+
 <table id="dataTable">
 
 <thead>
@@ -175,11 +215,17 @@ background:#161b22;
 <tbody></tbody>
 
 </table>
+
+</div>
+
+<div id="updatesPanel">
+<h3>Field Updates</h3>
+<div id="updatesContent"></div>
 </div>
 
 <script>
 
-/* GOOGLE SHEET CSV SOURCES */
+/* SHEET LINKS */
 
 const CSV_URL =
 "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ-f3JOwQZSlcBmpp4JO_Owut9JogW7KZYfJj5PONOc1TXE73xjvypZ1w6mWvvNzjFTaShiR6oYtzdt/pub?gid=0&single=true&output=csv";
@@ -189,26 +235,25 @@ const UPDATES_URL =
 
 /* MAP */
 
-let map = L.map("map").setView([25.84,76.56],13);
+let map=L.map("map").setView([25.84,76.56],13);
 
 L.tileLayer(
 "http://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}"
 ).addTo(map);
 
-let oms = new OverlappingMarkerSpiderfier(map);
+let oms=new OverlappingMarkerSpiderfier(map);
+let markerLayer=L.layerGroup().addTo(map);
 
-let markers = L.layerGroup().addTo(map);
+let animals={};
 
-let animals = {};
-
-/* LOAD DATA */
+/* LOAD TELEMETRY */
 
 Papa.parse(CSV_URL,{
 download:true,
 header:true,
 complete:function(results){
 
-console.log("Loaded rows:",results.data);
+console.log("Telemetry rows:",results.data);
 
 processData(results.data);
 
@@ -217,25 +262,28 @@ processData(results.data);
 
 /* PROCESS DATA */
 
-function processData(data){
+function processData(rows){
 
-data.forEach(row=>{
+rows.forEach(r=>{
 
-let id=row["Animal ID"];
+let id=r["Animal ID"];
 
-if(!id) return;
+let lat=parseFloat(r["Latitude"]);
+let lon=parseFloat(r["Longitude"]);
+
+if(!id||lat===0||lon===0||isNaN(lat)||isNaN(lon)) return;
 
 if(!animals[id]) animals[id]=[];
 
-animals[id].push(row);
+animals[id].push(r);
 
 });
 
 populateDropdown();
+renderMap();
+renderTable();
 
-renderMap("all");
-
-renderTable("all");
+document.getElementById("statusText").textContent="Telemetry Loaded";
 
 }
 
@@ -247,12 +295,12 @@ let select=document.getElementById("animalFilter");
 
 Object.keys(animals).forEach(id=>{
 
-let option=document.createElement("option");
+let opt=document.createElement("option");
 
-option.value=id;
-option.textContent=id;
+opt.value=id;
+opt.textContent=id;
 
-select.appendChild(option);
+select.appendChild(opt);
 
 });
 
@@ -260,32 +308,30 @@ select.appendChild(option);
 
 /* MAP */
 
-function renderMap(selected){
+function renderMap(){
 
-markers.clearLayers();
+markerLayer.clearLayers();
 
 Object.keys(animals).forEach(id=>{
 
-let record=animals[id][0];
+let r=animals[id][0];
 
-let lat=parseFloat(record.Latitude);
-let lon=parseFloat(record.Longitude);
-
-if(!lat||!lon) return;
+let lat=parseFloat(r["Latitude"]);
+let lon=parseFloat(r["Longitude"]);
 
 let marker=L.circleMarker([lat,lon],{
-radius:8,
-color:"cyan"
+radius:7,
+color:"#007bff",
+fillOpacity:0.8
 });
 
-marker.bindPopup(`
-<b>ID:</b> ${id}<br>
-<b>Time:</b> ${record.Timestamp}<br>
-<b>Place:</b> ${record.Place}
-`);
+marker.bindPopup(
+"<b>ID:</b> "+id+
+"<br><b>Place:</b> "+r["Place"]+
+"<br><b>Activity:</b> "+r["Activity"]
+);
 
-marker.addTo(markers);
-
+marker.addTo(markerLayer);
 oms.addMarker(marker);
 
 });
@@ -304,23 +350,68 @@ Object.keys(animals).forEach(id=>{
 
 let r=animals[id][0];
 
-let row=document.createElement("tr");
+let signal=r["Signal Strength"] || r["Signal Stength"] || "";
 
-row.innerHTML=`
+let tr=document.createElement("tr");
 
+tr.innerHTML=`
 <td>${id}</td>
-<td>${r.Timestamp}</td>
-<td>${r.Place}</td>
-<td>${r.Activity}</td>
-<td>${r["Signal Strength"]}</td>
-<td>${r.Latitude}</td>
-<td>${r.Longitude}</td>
-<td>${r.Remarks}</td>
-
+<td>${r["Timestamp"]}</td>
+<td>${r["Place"]}</td>
+<td>${r["Activity"]}</td>
+<td>${signal}</td>
+<td>${r["Latitude"]}</td>
+<td>${r["Longitude"]}</td>
+<td>${r["Remarks"]}</td>
 `;
 
-tbody.appendChild(row);
+tbody.appendChild(tr);
 
+});
+
+}
+
+/* FIELD UPDATES */
+
+function openUpdates(){
+
+let panel=document.getElementById("updatesPanel");
+
+panel.classList.toggle("open");
+
+if(panel.classList.contains("open")){
+
+loadUpdates();
+
+}
+
+}
+
+function loadUpdates(){
+
+Papa.parse(UPDATES_URL,{
+download:true,
+header:true,
+complete:function(results){
+
+let container=document.getElementById("updatesContent");
+
+container.innerHTML="";
+
+results.data.reverse().forEach(r=>{
+
+let div=document.createElement("div");
+
+div.className="update-item";
+
+div.innerHTML=
+"<b>"+r["Date"]+"</b><br>"+r["Update"];
+
+container.appendChild(div);
+
+});
+
+}
 });
 
 }
@@ -329,3 +420,4 @@ tbody.appendChild(row);
 
 </body>
 </html>
+```
