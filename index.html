@@ -461,11 +461,18 @@
 ════════════════════════════════════════════════════════════ */
 const SHEET_ID = '10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ';
 
-const CSV_URL =
+const CSV_DIRECT =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=0`;
 
-const UPDATES_CSV_URL =
+const UPDATES_CSV_DIRECT =
   `https://docs.google.com/spreadsheets/d/${SHEET_ID}/export?format=csv&gid=238985281`;
+
+// CORS proxy fallback — used automatically if direct fetch fails
+const PROXY = 'https://corsproxy.io/?';
+
+function proxyUrl(url) {
+  return PROXY + encodeURIComponent(url);
+}
 
 const MAP_CENTER   = [25.84, 76.56];
 const MAP_ZOOM     = 13;
@@ -526,45 +533,148 @@ function initMap() {
    CSV LOAD
 ════════════════════════════════════════════════════════════ */
 function loadCSVData() {
-  Papa.parse(CSV_URL, {
-    download       : true,
-    header         : true,
-    skipEmptyLines : true,
-    complete: function (results) {
+  document.getElementById('statusText').textContent = 'Loading data…';
+  fetchCSV(CSV_DIRECT,
+    function (results) {
       rawData = results.data;
       processData();
       populateDropdown();
       updateDashboard('all');
     },
-    error: function (err) {
-      console.error('Telemetry CSV error:', err);
-      alert('Failed to load telemetry data. Ensure the sheet is set to "Anyone with the link can view".');
+    function () {
+      // Direct failed — try via proxy
+      console.warn('Direct CSV fetch failed, trying proxy…');
+      fetchCSV(proxyUrl(CSV_DIRECT),
+        function (results) {
+          rawData = results.data;
+          processData();
+          populateDropdown();
+          updateDashboard('all');
+        },
+        function (err) {
+          console.error('Proxy CSV fetch also failed:', err);
+          document.getElementById('statusText').textContent = '⚠️ Data load failed';
+          showDataError();
+        }
+      );
     }
+  );
+}
+
+function fetchCSV(url, onSuccess, onError) {
+  Papa.parse(url, {
+    download       : true,
+    header         : true,
+    skipEmptyLines : true,
+    // Strip BOM and trim whitespace from every column header
+    transformHeader: function (h) {
+      return h.replace(/^\uFEFF/, '').trim();
+    },
+    complete: function (results) {
+      if (!results.data || results.data.length === 0) {
+        onError(new Error('Empty response'));
+        return;
+      }
+      // Detect HTML error page returned instead of CSV
+      const firstKey = Object.keys(results.data[0])[0] || '';
+      if (firstKey.toLowerCase().includes('<!doctype') ||
+          firstKey.toLowerCase().includes('<html')) {
+        onError(new Error('Got HTML instead of CSV'));
+        return;
+      }
+      onSuccess(results);
+    },
+    error: onError
   });
+}
+
+function showDataError() {
+  const tbody = document.querySelector('#dataTable tbody');
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" style="text-align:center;padding:24px;color:#c0392b;font-size:0.95rem;">
+        ⚠️ Could not load telemetry data.<br>
+        <span style="font-size:0.85rem;color:#666;">
+          Make sure the Google Sheet is shared as
+          <strong>"Anyone with the link → Viewer"</strong>
+          and try refreshing.
+        </span>
+      </td>
+    </tr>`;
 }
 
 /* ════════════════════════════════════════════════════════════
    DATA PROCESSING
 ════════════════════════════════════════════════════════════ */
+/* Build a lookup from lowercase-trimmed header → actual header in data */
+let COL = {};
+
+function detectColumns(sampleRow) {
+  COL = {};
+  const map = {
+    id        : ['animal id', 'animalid', 'id', 'animal_id'],
+    timestamp : ['timestamp', 'time', 'date time', 'datetime', 'date'],
+    lat       : ['latitude', 'lat'],
+    lng       : ['longitude', 'lng', 'lon', 'long'],
+    place     : ['place', 'location', 'site'],
+    activity  : ['activity', 'behaviour', 'behavior'],
+    signal    : ['signal strength', 'signal', 'signalstrength', 'rssi'],
+    remarks   : ['remarks', 'notes', 'comment', 'comments']
+  };
+  const actual = Object.keys(sampleRow);
+  for (const [key, aliases] of Object.entries(map)) {
+    const found = actual.find(h => aliases.includes(h.toLowerCase().trim()));
+    COL[key] = found || null;
+  }
+  console.log('Detected columns:', COL);
+  console.log('Sheet headers found:', actual);
+}
+
+function rowVal(row, key) {
+  return COL[key] ? (row[COL[key]] || '') : '';
+}
+
 function processData() {
   animalsData   = {};
   latestRecords = {};
 
+  if (rawData.length === 0) return;
+  detectColumns(rawData[0]);
+
+  if (!COL.id || !COL.lat || !COL.lng) {
+    console.error('Could not detect required columns. Headers found:', Object.keys(rawData[0]));
+    showColumnError(Object.keys(rawData[0]));
+    return;
+  }
+
   rawData.forEach(row => {
-    const id = (row['Animal ID'] || '').trim();
+    const id = rowVal(row, 'id').trim();
     if (!id) return;
-    row.parsedDate = parseCustomDate(row['Timestamp']);
+    row.parsedDate = parseCustomDate(rowVal(row, 'timestamp'));
     if (!animalsData[id]) animalsData[id] = [];
     animalsData[id].push(row);
   });
 
   for (const id in animalsData) {
-    // Sort newest → oldest; index 0 = latest, last index = release/first fix
     animalsData[id].sort((a, b) => b.parsedDate - a.parsedDate);
     latestRecords[id] = animalsData[id][0];
   }
 
   updateTelemetryStatus();
+}
+
+function showColumnError(found) {
+  const tbody = document.querySelector('#dataTable tbody');
+  tbody.innerHTML = `
+    <tr>
+      <td colspan="8" style="text-align:center;padding:20px;color:#c0392b;">
+        ⚠️ Data loaded but column names could not be matched.<br>
+        <span style="font-size:0.82rem;color:#555;">
+          Columns found in sheet: <code>${found.join(', ')}</code><br>
+          Expected columns like: <code>Animal ID, Latitude, Longitude, Timestamp</code>
+        </span>
+      </td>
+    </tr>`;
 }
 
 /* Parse "dd-mm-yyyy HH:MM"  or  "dd-mm-yyyy" */
@@ -606,7 +716,7 @@ function updateDashboard(selectedId) {
 }
 
 function markerKey(record) {
-  return `${record['Animal ID']}_${record['Timestamp']}`;
+  return `${rowVal(record,'id')}_${rowVal(record,'timestamp')}`;
 }
 
 /* ════════════════════════════════════════════════════════════
@@ -622,8 +732,8 @@ function renderMap(selectedId) {
     const bounds = [];
     for (const id in latestRecords) {
       const record = latestRecords[id];
-      const lat    = parseFloat(record['Latitude']);
-      const lng    = parseFloat(record['Longitude']);
+      const lat    = parseFloat(rowVal(record,'lat'));
+      const lng    = parseFloat(rowVal(record,'lng'));
       if (isNaN(lat) || isNaN(lng)) continue;
       const colorClass = RED_IDS.has(id) ? 'marker-selected' : 'marker-default';
       const marker = createAnimalMarker(record, colorClass);
@@ -644,8 +754,8 @@ function renderMap(selectedId) {
     // Iterate oldest → newest for correct chronological polyline
     for (let i = records.length - 1; i >= 0; i--) {
       const record = records[i];
-      const lat    = parseFloat(record['Latitude']);
-      const lng    = parseFloat(record['Longitude']);
+      const lat    = parseFloat(rowVal(record,'lat'));
+      const lng    = parseFloat(rowVal(record,'lng'));
       if (isNaN(lat) || isNaN(lng)) continue;
       const marker = createAnimalMarker(record, colorClass);
       mapLayerGroup.addLayer(marker);
@@ -667,8 +777,8 @@ function renderMap(selectedId) {
     // Release point star marker (first/oldest observation)
     const firstRecord = records[records.length - 1];
     if (firstRecord) {
-      const rLat = parseFloat(firstRecord['Latitude']);
-      const rLng = parseFloat(firstRecord['Longitude']);
+      const rLat = parseFloat(rowVal(firstRecord,'lat'));
+      const rLng = parseFloat(rowVal(firstRecord,'lng'));
       if (!isNaN(rLat) && !isNaN(rLng)) {
         const releaseMarker = createReleaseMarker(rLat, rLng, selectedId);
         mapLayerGroup.addLayer(releaseMarker);
@@ -686,13 +796,10 @@ function renderMap(selectedId) {
    ANIMAL MARKER FACTORY
 ════════════════════════════════════════════════════════════ */
 function createAnimalMarker(record, colorClass) {
-  const lat       = parseFloat(record['Latitude']);
-  const lng       = parseFloat(record['Longitude']);
-  const id        = record['Animal ID'];
-  const signalVal = record['Signal Strength']
-    || record['signal strength']
-    || record['SignalStrength']
-    || 'N/A';
+  const lat       = parseFloat(rowVal(record,'lat'));
+  const lng       = parseFloat(rowVal(record,'lng'));
+  const id        = rowVal(record,'id');
+  const signalVal = rowVal(record,'signal') || 'N/A';
 
   const icon = L.divIcon({
     className  : `animal-marker ${colorClass}`,
@@ -706,13 +813,13 @@ function createAnimalMarker(record, colorClass) {
   marker.bindPopup(`
     <div class="custom-popup">
       <div class="popup-row"><b>Animal ID:</b> ${id}</div>
-      <div class="popup-row"><b>Last Seen:</b> ${record['Timestamp'] || 'N/A'}</div>
-      <div class="popup-row"><b>Location:</b><br>${record['Place'] || 'N/A'}</div>
-      <div class="popup-row"><b>Activity:</b><br>${record['Activity'] || 'N/A'}</div>
+      <div class="popup-row"><b>Last Seen:</b> ${rowVal(record,'timestamp') || 'N/A'}</div>
+      <div class="popup-row"><b>Location:</b><br>${rowVal(record,'place') || 'N/A'}</div>
+      <div class="popup-row"><b>Activity:</b><br>${rowVal(record,'activity') || 'N/A'}</div>
       <div class="popup-row"><b>Signal Strength:</b><br>${signalVal}</div>
-      <div class="popup-row"><b>Latitude:</b> ${record['Latitude']}</div>
-      <div class="popup-row"><b>Longitude:</b> ${record['Longitude']}</div>
-      <div class="popup-row"><b>Remarks:</b><br>${record['Remarks'] || 'None'}</div>
+      <div class="popup-row"><b>Latitude:</b> ${rowVal(record,'lat')}</div>
+      <div class="popup-row"><b>Longitude:</b> ${rowVal(record,'lng')}</div>
+      <div class="popup-row"><b>Remarks:</b><br>${rowVal(record,'remarks') || 'None'}</div>
     </div>
   `);
   return marker;
@@ -759,20 +866,17 @@ function renderTable(selectedId) {
     const tr        = document.createElement('tr');
     if (index >= DEFAULT_ROWS) tr.classList.add('row-hidden');
     const key       = markerKey(row);
-    const signalVal = row['Signal Strength']
-      || row['signal strength']
-      || row['SignalStrength']
-      || '';
+    const signalVal = rowVal(row,'signal');
 
     tr.innerHTML = `
-      <td><strong>${row['Animal ID'] || ''}</strong></td>
-      <td>${row['Timestamp']  || ''}</td>
-      <td>${row['Place']      || ''}</td>
-      <td>${row['Activity']   || ''}</td>
+      <td><strong>${rowVal(row,'id')}</strong></td>
+      <td>${rowVal(row,'timestamp')}</td>
+      <td>${rowVal(row,'place')}</td>
+      <td>${rowVal(row,'activity')}</td>
       <td>${signalVal}</td>
-      <td>${row['Latitude']   || ''}</td>
-      <td>${row['Longitude']  || ''}</td>
-      <td>${row['Remarks']    || ''}</td>
+      <td>${rowVal(row,'lat')}</td>
+      <td>${rowVal(row,'lng')}</td>
+      <td>${rowVal(row,'remarks')}</td>
     `;
 
     tr.addEventListener('click', function () {
@@ -863,8 +967,8 @@ function renderAnalytics(selectedId) {
   const prev   = records.length > 1 ? records[1]              : null;
   const first  = records[records.length - 1];   // release point
 
-  const latL = parseFloat(latest['Latitude']),  lngL = parseFloat(latest['Longitude']);
-  const latF = parseFloat(first['Latitude']),   lngF = parseFloat(first['Longitude']);
+  const latL = parseFloat(rowVal(latest,'lat')),  lngL = parseFloat(rowVal(latest,'lng'));
+  const latF = parseFloat(rowVal(first,'lat')),   lngF = parseFloat(rowVal(first,'lng'));
 
   if (isNaN(latL) || isNaN(lngL) || isNaN(latF) || isNaN(lngF)) {
     panel.classList.remove('visible');
@@ -877,8 +981,8 @@ function renderAnalytics(selectedId) {
   // 2. Maximum displacement: furthest any record is from release
   let maxDisp = 0;
   records.forEach(rec => {
-    const lat = parseFloat(rec['Latitude']);
-    const lng = parseFloat(rec['Longitude']);
+    const lat = parseFloat(rowVal(rec,'lat'));
+    const lng = parseFloat(rowVal(rec,'lng'));
     if (isNaN(lat) || isNaN(lng)) return;
     const d = haversineDistance(latF, lngF, lat, lng);
     if (d > maxDisp) maxDisp = d;
@@ -887,8 +991,8 @@ function renderAnalytics(selectedId) {
   // 3. Distance from previous fix
   let prevFixText = '—';
   if (prev) {
-    const latP = parseFloat(prev['Latitude']);
-    const lngP = parseFloat(prev['Longitude']);
+    const latP = parseFloat(rowVal(prev,'lat'));
+    const lngP = parseFloat(rowVal(prev,'lng'));
     if (!isNaN(latP) && !isNaN(lngP))
       prevFixText = fmtM(haversineDistance(latP, lngP, latL, lngL));
   }
@@ -929,42 +1033,66 @@ function openFieldUpdates()  { document.getElementById('updatesOverlay').classLi
 function closeFieldUpdates() { document.getElementById('updatesOverlay').classList.remove('open'); }
 
 function loadFieldUpdates() {
-  Papa.parse(UPDATES_CSV_URL, {
+  fetchFieldUpdates(UPDATES_CSV_DIRECT, function success(results) {
+    renderFieldUpdates(results);
+  }, function fail() {
+    // Try proxy
+    fetchFieldUpdates(proxyUrl(UPDATES_CSV_DIRECT), function (results) {
+      renderFieldUpdates(results);
+    }, function () {
+      document.getElementById('updatesList').innerHTML =
+        '<p class="updates-msg">⚠️ Could not load field updates.</p>';
+    });
+  });
+}
+
+function fetchFieldUpdates(url, onSuccess, onError) {
+  Papa.parse(url, {
     download       : true,
     header         : true,
     skipEmptyLines : true,
+    transformHeader: function (h) { return h.replace(/^\uFEFF/, '').trim(); },
     complete: function (results) {
-      const list = document.getElementById('updatesList');
-      list.innerHTML = '';
-
-      const valid = (results.data || []).filter(r =>
-        (r['Date'] || '').trim() && (r['Update'] || '').trim()
-      );
-
-      if (valid.length === 0) {
-        list.innerHTML = '<p class="updates-msg">No field updates available.</p>';
+      if (!results.data || results.data.length === 0) {
+        onError(new Error('Empty response'));
         return;
       }
-
-      // Sort newest → oldest, display only the latest single entry
-      valid.sort((a, b) =>
-        parseCustomDate(b['Date']) - parseCustomDate(a['Date'])
-      );
-
-      const entry = valid[0];
-      const item  = document.createElement('div');
-      item.className = 'update-item';
-      item.innerHTML = `
-        <div class="update-date">📅 ${entry['Date'].trim()}</div>
-        <div class="update-text">${entry['Update'].trim()}</div>
-      `;
-      list.appendChild(item);
+      onSuccess(results);
     },
-    error: function () {
-      document.getElementById('updatesList').innerHTML =
-        '<p class="updates-msg">⚠️ Could not load field updates.</p>';
-    }
+    error: onError
   });
+}
+
+function renderFieldUpdates(results) {
+  const list = document.getElementById('updatesList');
+  list.innerHTML = '';
+
+  // Detect date and update column names flexibly
+  const allKeys   = results.data.length ? Object.keys(results.data[0]) : [];
+  const dateKey   = allKeys.find(k => ['date'].includes(k.toLowerCase().trim()))   || 'Date';
+  const updateKey = allKeys.find(k => ['update','updates','note','notes','entry'].includes(k.toLowerCase().trim())) || 'Update';
+
+  const valid = (results.data || []).filter(r =>
+    (r[dateKey] || '').trim() && (r[updateKey] || '').trim()
+  );
+
+  if (valid.length === 0) {
+    list.innerHTML = '<p class="updates-msg">No field updates available.</p>';
+    return;
+  }
+
+  valid.sort((a, b) =>
+    parseCustomDate(b[dateKey]) - parseCustomDate(a[dateKey])
+  );
+
+  const entry = valid[0];
+  const item  = document.createElement('div');
+  item.className = 'update-item';
+  item.innerHTML = `
+    <div class="update-date">📅 ${(entry[dateKey] || '').trim()}</div>
+    <div class="update-text">${(entry[updateKey] || '').trim()}</div>
+  `;
+  list.appendChild(item);
 }
 
 /* ════════════════════════════════════════════════════════════
