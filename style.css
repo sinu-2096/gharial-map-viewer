@@ -1,81 +1,118 @@
 body{
 margin:0;
-font-family:Arial;
-background:#111;
-color:white;
+font-family:Segoe UI,Arial;
+background:#f4f6f9;
+color:#333;
 }
 
+/* HEADER */
+
 header{
-background:#222;
-padding:15px;
+height:70px;
+background:#2c3e50;
+color:white;
 display:flex;
 align-items:center;
 justify-content:center;
-box-shadow:0 3px 10px rgba(0,0,0,0.5);
+position:relative;
 }
 
-.logo{
-height:40px;
+header h1{
+font-size:20px;
+margin:0;
+}
+
+.logo-left img{
 position:absolute;
 left:20px;
+max-height:40px;
 }
 
-.controls{
+.logo-right img{
+position:absolute;
+right:20px;
+max-height:40px;
+}
+
+/* CONTROL PANEL */
+
+.top-panel{
 display:flex;
-gap:15px;
-padding:10px;
-background:#1a1a1a;
 align-items:center;
+gap:15px;
+padding:10px 20px;
+background:white;
+border-bottom:1px solid #ddd;
+}
+
+button{
+padding:6px 12px;
+background:#27ae60;
+border:none;
+color:white;
+border-radius:4px;
+cursor:pointer;
+}
+
+button:hover
+
+/* MAP */
+
+.map-container{
+padding:20px;
 }
 
 #map{
 height:70vh;
+border-radius:8px;
+box-shadow:0 5px 15px rgba(0,0,0,0.2);
+}
+
+/* TABLE */
+
+.table-container{
+padding:20px;
 }
 
 table{
 width:100%;
 border-collapse:collapse;
-background:#1b1b1b;
-}
-
-th,td{
-padding:10px;
-border-bottom:1px solid #333;
+background:white;
 }
 
 th{
-background:#333;
+background:#2c3e50;
+color:white;
+padding:10px;
+text-align:left;
 }
 
-.dot{
-width:10px;
-height:10px;
-background:#2ecc71;
+td{
+padding:8px;
+border-bottom:1px solid #eee;
+}
+
+tr:hover
+
+/* STATUS */
+
+.status-dot{
+width:8px;
+height:8px;
+background:#27ae60;
 border-radius:50%;
 display:inline-block;
+margin-right:5px;
 animation:blink 2s infinite;
 }
 
 @keyframes blink{
 0%{opacity:1}
-50%{opacity:0.3}
+50%{opacity:.2}
 100%{opacity:1}
 }
 
-#movementPanel{
-background:#2a1e00;
-padding:10px;
-}
-
-#analyticsPanel{
-padding:10px;
-background:#101820;
-}
-
-#survivalPanel{
-padding:10px;
-background:#162616;
-}
+/* UPDATES PANEL */
 
 #updatesPanel{
 position:fixed;
@@ -83,12 +120,19 @@ right:-350px;
 top:0;
 width:350px;
 height:100%;
-background:#222;
+background:white;
+box-shadow:-5px 0 20px rgba(0,0,0,0.2);
 transition:0.3s;
-overflow:auto;
 padding:20px;
+overflow-y:auto;
 }
 
 #updatesPanel.open{
 right:0;
+}
+
+.update-item{
+margin-bottom:15px;
+border-left:3px solid #27ae60;
+padding-left:10px;
 }
