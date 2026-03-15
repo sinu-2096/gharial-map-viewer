@@ -4,216 +4,56 @@
 <meta charset="UTF-8">
 <title>Pali FT Hatchlings Telemetry Dashboard</title>
 
+<link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
-<style>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
 
-:root{
---map-height:70vh;
---primary-bg:#f4f6f9;
---header-bg:#2c3e50;
---text-color:#333;
---border-color:#ccc;
-}
-
-*{
-box-sizing:border-box;
-margin:0;
-padding:0;
-font-family:'Segoe UI',sans-serif;
-}
-
-body{
-background:var(--primary-bg);
-display:flex;
-flex-direction:column;
-min-height:100vh;
-}
-
-/* HEADER */
-
-header{
-background:#2c3e50;
-color:white;
-padding:12px 20px;
-display:grid;
-grid-template-columns:auto auto 1fr;
-align-items:center;
-gap:12px;
-}
-
-header img{
-height:42px;
-}
-
-header h1{
-text-align:center;
-font-size:1.5rem;
-}
-
-/* PANEL */
-
-.top-panel{
-background:white;
-padding:12px 20px;
-border-bottom:1px solid #ccc;
-display:flex;
-align-items:center;
-gap:25px;
-flex-wrap:wrap;
-}
-
-.filter-group{
-display:flex;
-align-items:center;
-gap:10px;
-}
-
-.filter-group select{
-padding:7px 10px;
-}
-
-/* MAP */
-
-.map-container{
-height:70vh;
-}
-
-#map{
-height:100%;
-}
-
-/* TABLE */
-
-.table-container{
-padding:20px;
-background:white;
-overflow-x:auto;
-}
-
-table{
-width:100%;
-border-collapse:collapse;
-}
-
-th{
-background:#2c3e50;
-color:white;
-padding:10px;
-}
-
-td{
-padding:8px;
-border-bottom:1px solid #ddd;
-}
-
-tr:hover{
-background:#eef3f8;
-cursor:pointer;
-}
-
-/* MARKERS */
-
-.animal-marker{
-border-radius:50%;
-width:28px;
-height:28px;
-display:flex;
-align-items:center;
-justify-content:center;
-color:white;
-font-weight:bold;
-font-size:12px;
-border:2px solid white;
-box-shadow:0 0 6px rgba(0,0,0,0.5);
-background:#007bff;
-}
-
-.dead-marker{
-background:#d93025;
-}
-
-.star-marker{
-font-size:18px;
-}
-
-/* FIELD PANEL */
-
-.field-panel{
-position:fixed;
-top:0;
-right:-360px;
-width:360px;
-height:100%;
-background:white;
-box-shadow:-4px 0 10px rgba(0,0,0,0.25);
-transition:right 0.3s;
-z-index:999;
-display:flex;
-flex-direction:column;
-}
-
-.field-panel.open{
-right:0;
-}
-
-.field-header{
-display:flex;
-justify-content:space-between;
-align-items:center;
-padding:12px;
-border-bottom:1px solid #ddd;
-font-weight:bold;
-}
-
-.field-controls button{
-border:none;
-background:none;
-font-size:18px;
-cursor:pointer;
-margin-left:8px;
-}
-
-.field-body{
-padding:15px;
-overflow:auto;
-}
-
-.update-select{
-margin-top:12px;
-width:100%;
-padding:6px;
-}
-
-</style>
+<script src="config.js"></script>
+<script src="markers.js"></script>
+<script src="analytics.js"></script>
+<script src="heatmap.js"></script>
+<script src="survival.js"></script>
+<script src="corridors.js"></script>
+<script src="updates.js"></script>
+<script src="dashboard.js"></script>
 </head>
 
 <body>
 
 <header>
-<img src="image.png">
-<img src="unnamed.png">
-<h1>🐊 Pali FT Hatchlings Telemetry Dashboard</h1>
+<img src="assets/image.png" class="logo">
+<h1>Pali FT Hatchlings Telemetry Dashboard</h1>
 </header>
 
-<div class="top-panel">
+<div class="controls">
 
-<div class="filter-group">
-<label>Select Animal</label>
 <select id="animalFilter">
-<option value="all">All Animals</option>
+<option value="all">All Hatchlings</option>
 </select>
+
+<div class="hint">
+Select hatchling to view movement track
 </div>
 
-<button onclick="toggleFieldPanel()">Field Updates</button>
+<div class="telemetry-status">
+<span class="dot"></span>
+<span id="statusText">Loading telemetry...</span>
+</div>
+
+<button onclick="openUpdates()">Field Updates</button>
 
 </div>
 
-<div class="map-container">
+<div id="movementPanel"></div>
+
 <div id="map"></div>
-</div>
 
-<div class="table-container">
+<div id="analyticsPanel"></div>
+
+<div id="survivalPanel"></div>
 
 <table id="dataTable">
 <thead>
@@ -223,362 +63,18 @@ padding:6px;
 <th>Place</th>
 <th>Activity</th>
 <th>Signal</th>
-<th>Latitude</th>
-<th>Longitude</th>
+<th>Lat</th>
+<th>Lon</th>
 <th>Remarks</th>
 </tr>
 </thead>
 <tbody></tbody>
 </table>
 
+<div id="updatesPanel">
+<button onclick="closeUpdates()">Close</button>
+<div id="updatesContent"></div>
 </div>
-
-<div class="field-panel" id="fieldPanel">
-
-<div class="field-header">
-Field Updates
-<div class="field-controls">
-<button onclick="minimizePanel()">–</button>
-<button onclick="toggleFieldPanel()">✕</button>
-</div>
-</div>
-
-<div class="field-body">
-
-<div id="latestUpdate"></div>
-
-<select id="previousUpdates" class="update-select"></select>
-
-</div>
-
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
-
-<script>
-
-const CSV_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=0';
-const UPDATE_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=238985281';
-
-const DEAD_IDS=[30,33,34,38,64,96,98];
-
-let map;
-let oms;
-
-let rawData=[];
-let animalsData={};
-let latestRecords={};
-let markers=[];
-let markerMapping={};
-
-function init(){
-
-map=L.map('map').setView([25.84,76.56],13);
-
-L.tileLayer(
-'http://mt0.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
-{maxZoom:20}
-).addTo(map);
-
-oms=new OverlappingMarkerSpiderfier(map,{
-keepSpiderfied:true,
-circleSpiralSwitchover:6,
-legWeight:2
-});
-
-loadTelemetry();
-loadUpdates();
-
-document.getElementById('animalFilter')
-.addEventListener('change',e=>updateDashboard(e.target.value));
-
-}
-
-function loadTelemetry(){
-
-Papa.parse(CSV_URL,{
-download:true,
-header:true,
-skipEmptyLines:true,
-complete:function(results){
-
-rawData=results.data;
-
-processData();
-populateDropdown();
-updateDashboard('all');
-
-}
-});
-
-}
-
-function processData(){
-
-animalsData={};
-
-rawData.forEach(r=>{
-
-let id=r['Animal ID'];
-if(!id) return;
-
-if(!animalsData[id]) animalsData[id]=[];
-
-r.parsedDate=new Date(r.Timestamp);
-
-animalsData[id].push(r);
-
-});
-
-for(let id in animalsData){
-
-animalsData[id].sort((a,b)=>b.parsedDate-a.parsedDate);
-
-latestRecords[id]=animalsData[id][0];
-
-}
-
-}
-
-function populateDropdown(){
-
-let sel=document.getElementById('animalFilter');
-
-Object.keys(animalsData).forEach(id=>{
-let o=document.createElement('option');
-o.value=id;
-o.textContent=id;
-sel.appendChild(o);
-});
-
-}
-
-function clearMap(){
-
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
-markerMapping={};
-
-}
-
-function updateDashboard(id){
-
-clearMap();
-renderMap(id);
-renderTable(id);
-
-}
-
-function renderMap(selectedId){
-
-if(selectedId==='all'){
-
-for(let id in latestRecords){
-addMarker(latestRecords[id]);
-}
-
-}
-else{
-
-let rec=animalsData[selectedId];
-
-let latlngs=[];
-
-for(let i=rec.length-1;i>=0;i--){
-
-let r=rec[i];
-
-addMarker(r);
-
-latlngs.push([r.Latitude,r.Longitude]);
-
-}
-
-L.polyline(latlngs,{color:'#ffc107',weight:3}).addTo(map);
-
-addReleaseMarker(rec[rec.length-1]);
-
-computeAnalytics(selectedId);
-
-}
-
-}
-
-function addMarker(r){
-
-let id=parseInt(r['Animal ID']);
-
-let lat=parseFloat(r.Latitude);
-let lng=parseFloat(r.Longitude);
-
-if(isNaN(lat)||isNaN(lng)) return;
-
-let className='animal-marker';
-
-if(DEAD_IDS.includes(id)) className+=' dead-marker';
-
-let icon=L.divIcon({
-className:className,
-html:id,
-iconSize:[28,28]
-});
-
-let m=L.marker([lat,lng],{icon}).addTo(map);
-
-m.bindPopup(
-"<b>ID:</b> "+r['Animal ID']+
-"<br><b>Time:</b> "+r['Timestamp']+
-"<br><b>Place:</b> "+r['Place']+
-"<br><b>Activity:</b> "+r['Activity']+
-"<br><b>Signal:</b> "+r['Signal Stength']+
-"<br><b>Lat:</b> "+r['Latitude']+
-"<br><b>Lng:</b> "+r['Longitude']+
-"<br><b>Remarks:</b> "+(r['Remarks']||'')
-);
-
-markers.push(m);
-oms.addMarker(m);
-
-markerMapping[id+"_"+r['Timestamp']]=m;
-
-}
-
-function addReleaseMarker(r){
-
-let icon=L.divIcon({
-className:'star-marker',
-html:'⭐'
-});
-
-L.marker([r.Latitude,r.Longitude],{icon})
-.addTo(map)
-.bindPopup("Release Site");
-
-}
-
-function haversine(a,b){
-
-let R=6371000;
-
-let lat1=a[0]*Math.PI/180;
-let lat2=b[0]*Math.PI/180;
-
-let dlat=(b[0]-a[0])*Math.PI/180;
-let dlon=(b[1]-a[1])*Math.PI/180;
-
-let x=Math.sin(dlat/2)**2+
-Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
-
-let c=2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-
-return R*c;
-
-}
-
-function computeAnalytics(id){
-
-let rec=animalsData[id];
-
-if(rec.length<10) return;
-
-let last10=rec.slice(0,10);
-
-let center=[last10[0].Latitude,last10[0].Longitude];
-
-let max=0;
-
-last10.forEach(r=>{
-let d=haversine(center,[r.Latitude,r.Longitude]);
-if(d>max) max=d;
-});
-
-let type="Settler";
-
-if(max>300 && max<=1500) type="Explorer";
-if(max>1500) type="Disperser";
-
-console.log("ID",id,type);
-
-}
-
-function renderTable(selectedId){
-
-let tbody=document.querySelector('#dataTable tbody');
-tbody.innerHTML='';
-
-let data=(selectedId==='all') ?
-Object.values(latestRecords) :
-animalsData[selectedId];
-
-data.forEach(r=>{
-
-let tr=document.createElement('tr');
-
-tr.innerHTML=`
-<td>${r['Animal ID']}</td>
-<td>${r['Timestamp']}</td>
-<td>${r['Place']}</td>
-<td>${r['Activity']}</td>
-<td>${r['Signal Stength']}</td>
-<td>${r['Latitude']}</td>
-<td>${r['Longitude']}</td>
-<td>${r['Remarks']||''}</td>
-`;
-
-tbody.appendChild(tr);
-
-});
-
-}
-
-function loadUpdates(){
-
-Papa.parse(UPDATE_URL,{
-download:true,
-header:true,
-complete:function(res){
-
-let rows=res.data;
-
-rows.sort((a,b)=>new Date(b.Date)-new Date(a.Date));
-
-let latest=rows[0];
-
-document.getElementById('latestUpdate')
-.innerHTML="<b>"+latest.Date+"</b><br>"+latest.Update;
-
-let select=document.getElementById('previousUpdates');
-
-rows.forEach(r=>{
-let opt=document.createElement('option');
-opt.textContent=r.Date+" - "+r.Update;
-select.appendChild(opt);
-});
-
-}
-});
-
-}
-
-function toggleFieldPanel(){
-
-document.getElementById('fieldPanel')
-.classList.toggle('open');
-
-}
-
-function minimizePanel(){
-
-document.getElementById('fieldPanel')
-.style.right="-320px";
-
-}
-
-document.addEventListener('DOMContentLoaded',init);
-
-</script>
 
 </body>
 </html>
