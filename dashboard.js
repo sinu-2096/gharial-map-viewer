@@ -34,6 +34,8 @@ processTelemetry();
 
 renderDashboard("all");
 
+document.getElementById("statusText").textContent="Telemetry Loaded";
+
 }
 });
 
@@ -47,13 +49,18 @@ telemetryData.forEach(r=>{
 
 const id=r["Animal ID"];
 
-if(!id) return;
+const lat=parseFloat(r["Latitude"]);
+const lon=parseFloat(r["Longitude"]);
+
+if(!id||lat===0||lon===0||isNaN(lat)||isNaN(lon)) return;
 
 if(!animals[id]) animals[id]=[];
 
 animals[id].push(r);
 
 });
+
+populateDropdown();
 
 }
 
@@ -65,23 +72,76 @@ if(id==="all"){
 
 Object.keys(animals).forEach(a=>{
 
-const rec=animals[a][0];
-
-createMarker(rec);
+createMarker(animals[a][0]);
 
 });
 
 }else{
 
-drawTrack(id);
+animals[id].forEach(r=>createMarker(r));
 
 }
 
 renderTable(id);
 
-updateAnalytics(id);
+}
 
-updateSurvival();
+function populateDropdown(){
+
+const select=document.getElementById("animalFilter");
+
+Object.keys(animals).forEach(id=>{
+
+const opt=document.createElement("option");
+
+opt.value=id;
+opt.textContent=id;
+
+select.appendChild(opt);
+
+});
+
+select.addEventListener("change",e=>{
+renderDashboard(e.target.value);
+});
+
+}
+
+function renderTable(selected){
+
+const tbody=document.querySelector("#dataTable tbody");
+
+tbody.innerHTML="";
+
+let rows=[];
+
+if(selected==="all"){
+rows=telemetryData;
+}else{
+rows=animals[selected];
+}
+
+rows.forEach(r=>{
+
+const signal=r["Signal Strength"]||r["Signal Stength"]||"";
+
+const tr=document.createElement("tr");
+
+tr.innerHTML=`
+
+<td>${r["Animal ID"]}</td>
+<td>${r["Timestamp"]}</td>
+<td>${r["Place"]}</td>
+<td>${r["Activity"]}</td>
+<td>${signal}</td>
+<td>${r["Latitude"]}</td>
+<td>${r["Longitude"]}</td>
+<td>${r["Remarks"]}</td>
+`;
+
+tbody.appendChild(tr);
+
+});
 
 }
 
