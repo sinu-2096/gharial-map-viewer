@@ -1,38 +1,37 @@
 function openUpdates(){
 
-document.getElementById("updatesPanel").classList.add("open");
+const panel=document.getElementById("updatesPanel");
 
+panel.classList.toggle("open");
+
+if(panel.classList.contains("open")){
 loadUpdates();
-
 }
-
-function closeUpdates(){
-
-document.getElementById("updatesPanel").classList.remove("open");
 
 }
 
 function loadUpdates(){
 
-Papa.parse(CONFIG.UPDATES_CSV_URL,{
+Papa.parse(CONFIG.UPDATES_URL,{
 download:true,
 header:true,
-complete:(res)=>{
+complete:function(res){
 
-let html="";
+const container=document.getElementById("updatesContent");
+
+container.innerHTML="";
 
 res.data.reverse().forEach(r=>{
 
-html+=`
-<p>
-<b>${r.Date}</b><br>
-${r.Update}
-</p>
-`;
+const div=document.createElement("div");
+
+div.className="update-item";
+
+div.innerHTML="<b>"+r["Date"]+"</b><br>"+r["Update"];
+
+container.appendChild(div);
 
 });
-
-document.getElementById("updatesContent").innerHTML=html;
 
 }
 });
