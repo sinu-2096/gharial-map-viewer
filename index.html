@@ -2,105 +2,685 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Pali FT Hatchlings Telemetry Dashboard</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
 <style>
-:root{--bg:#edf3f8;--panel:#ffffff;--ink:#203545;--muted:#617282;--line:#d6e0e8;--head:#18324a;--gold:#f1c644;--green:#27ae60;--track:#ffc107;--blue:#007bff;--red:#dc3545;--shadow:0 10px 28px rgba(17,42,63,.12)}
-*{box-sizing:border-box;margin:0;padding:0}
-body{min-height:100vh;background:linear-gradient(180deg,#f5f8fb 0%,#e9f0f6 100%);color:var(--ink);font-family:"Segoe UI",Tahoma,sans-serif;display:flex;flex-direction:column}
-header{position:relative;min-height:82px;padding:14px 20px;background:linear-gradient(135deg,#173047 0%,#294661 100%);color:#fff;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.16)}
-.header-logos{position:absolute;left:20px;display:flex;align-items:center;gap:12px;max-width:42%}
-.header-logo{height:52px;width:auto;object-fit:contain;filter:drop-shadow(0 2px 5px rgba(0,0,0,.3))}
-header h1{font-size:1.45rem;text-align:center;padding:0 220px}
-.top-panel{background:rgba(255,255,255,.95);border-bottom:1px solid var(--line);padding:14px 20px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
-.filter-group{display:flex;align-items:center;gap:10px}.filter-group label{font-weight:700;color:var(--head)}
-.filter-group select{min-width:170px;padding:9px 14px;border:1px solid var(--line);border-radius:10px;font-size:.98rem;background:#fff}
-.hint-text{color:var(--muted);font-size:.92rem;flex:1;min-width:220px}
-.telemetry-status{display:flex;align-items:center;gap:8px;font-size:.84rem;color:#4e6070;background:rgba(24,50,74,.06);padding:8px 12px;border-radius:999px}
-.status-dot{width:10px;height:10px;border-radius:50%;background:var(--green);animation:blink 2.2s ease-in-out infinite;box-shadow:0 0 0 5px rgba(39,174,96,.12)}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
-.field-updates-btn{padding:9px 16px;background:var(--green);color:#fff;border:none;border-radius:999px;cursor:pointer;font-size:.88rem;font-weight:700;box-shadow:0 8px 18px rgba(39,174,96,.22)}
-.analytics-panel{display:none;margin:18px 20px 0;padding:18px 20px;border-radius:18px;background:linear-gradient(135deg,#fff8de 0%,#fff2be 100%);border:1px solid #e5be4c;box-shadow:var(--shadow)}
-.analytics-panel.visible{display:block}.analytics-title{font-size:1rem;font-weight:800;color:#774f00;margin-bottom:12px}
-.analytics-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.analytics-card{background:rgba(255,255,255,.72);border:1px solid rgba(176,129,0,.18);border-radius:14px;padding:14px 16px}
-.analytics-label{display:block;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:#8a6a12;margin-bottom:6px;font-weight:700}.analytics-value{font-size:1.12rem;font-weight:800;color:#3c3112}
-.map-container{height:70vh;margin-top:18px}.map-container,#map{width:100%;height:100%}
-.table-hint{font-size:.85rem;color:#667482;padding:12px 20px 0}.table-container{padding:16px 20px 24px;overflow-x:auto}.table-shell{background:#fff;border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
-.telemetry-table{width:100%;border-collapse:collapse;font-size:.95rem}.telemetry-table th,.telemetry-table td{padding:12px 15px;text-align:left;border-bottom:1px solid #e5edf3;vertical-align:top}
-.telemetry-table th{position:sticky;top:0;z-index:1;background:var(--head);color:#fff;font-size:.92rem}.telemetry-table tbody tr{cursor:pointer;transition:background-color .15s ease}.telemetry-table tbody tr:hover{background:#d6e8f7}.telemetry-table tbody tr.row-active{background:#bad7ef;outline:2px solid #2f7fbc;outline-offset:-2px}.row-hidden{display:none}
-.see-more-row td{text-align:center;padding:12px;background:#f7fbff;cursor:pointer!important}.see-more-btn{display:inline-block;color:#2f7fbc;font-weight:700;border:1px solid #2f7fbc;border-radius:999px;padding:7px 18px}
-.animal-marker{border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:12px;border:2px solid #fff;box-shadow:0 0 8px rgba(0,0,0,.45);text-align:center}.marker-default{background:var(--blue)}.marker-selected{background:var(--red)}
-.release-marker{display:flex;align-items:center;justify-content:center;width:40px;height:40px;font-size:26px;color:var(--gold);text-shadow:0 1px 4px rgba(0,0,0,.5)}.release-label{background:rgba(24,50,74,.92);color:#fff;padding:4px 9px;border-radius:999px;font-size:.78rem;font-weight:700;white-space:nowrap}
-.custom-popup .leaflet-popup-content{font-size:14px;line-height:1.7;min-width:220px;margin:14px 16px}.popup-row{margin-bottom:5px}
-.updates-overlay{display:none;position:fixed;top:0;right:0;width:min(360px,92vw);height:100%;background:#fff;box-shadow:-5px 0 20px rgba(0,0,0,.18);z-index:10000;flex-direction:column}.updates-overlay.open{display:flex}.updates-header{background:#20384d;color:#fff;padding:16px 18px;display:flex;justify-content:space-between;align-items:center;font-weight:800}.updates-close{cursor:pointer;font-size:1.35rem;background:none;border:none;color:#fff}.updates-list{flex:1;overflow-y:auto;padding:16px 18px}.update-item{border-left:4px solid var(--green);padding:10px 12px;background:#f5fcf7;border-radius:0 10px 10px 0}.update-label{display:inline-block;font-size:.78rem;font-weight:800;text-transform:uppercase;color:#1f6f43;margin-bottom:6px}.update-text{font-size:.92rem;color:#2b3e4d;line-height:1.55}.updates-msg{color:#788491;font-style:italic;padding:8px 0;font-size:.9rem}
-@media(max-width:900px){header h1{padding:0 160px 0 190px}.analytics-grid{grid-template-columns:1fr}}
-@media(max-width:720px){header{justify-content:flex-start;flex-wrap:wrap;gap:10px}.header-logos{position:static;max-width:none}.header-logo{height:44px}header h1{padding:0;font-size:1.25rem;text-align:left}.filter-group{width:100%;flex-wrap:wrap}.filter-group select{width:100%}.analytics-panel,.table-hint,.table-container{margin-left:0;margin-right:0;padding-left:14px;padding-right:14px}}
+
+:root{
+--map-height:70vh;
+--primary-bg:#f4f6f9;
+--header-bg:#2c3e50;
+--text-color:#333;
+--border-color:#ccc;
+}
+
+*{
+box-sizing:border-box;
+margin:0;
+padding:0;
+font-family:'Segoe UI',sans-serif;
+}
+
+body{
+background:var(--primary-bg);
+color:var(--text-color);
+display:flex;
+flex-direction:column;
+min-height:100vh;
+}
+
+/* HEADER */
+
+header{
+background:var(--header-bg);
+color:white;
+padding:12px 20px;
+display:grid;
+grid-template-columns:auto auto 1fr;
+align-items:center;
+gap:12px;
+}
+
+header img{
+height:42px;
+}
+
+header h1{
+text-align:center;
+font-size:1.5rem;
+}
+
+/* PANELS */
+
+.top-panel{
+background:white;
+padding:12px 20px;
+border-bottom:1px solid var(--border-color);
+display:flex;
+align-items:center;
+gap:25px;
+flex-wrap:wrap;
+}
+
+.filter-group{
+display:flex;
+align-items:center;
+gap:10px;
+}
+
+.filter-group label{
+font-weight:bold;
+}
+
+.filter-group select{
+padding:8px 12px;
+border:1px solid var(--border-color);
+border-radius:4px;
+}
+
+.analytics-panel{
+display:none;
+background:#fff8dc;
+padding:12px 20px;
+border-bottom:1px solid #ddd;
+font-size:0.95rem;
+}
+
+.status-bar{
+background:#ecf0f1;
+padding:8px 20px;
+font-size:0.9rem;
+}
+
+/* MAP */
+
+.map-container{
+height:var(--map-height);
+}
+
+#map{
+width:100%;
+height:100%;
+}
+
+/* TABLE */
+
+.table-hint{
+font-size:0.85rem;
+color:#777;
+padding:8px 20px 0 20px;
+background:white;
+}
+
+.table-container{
+padding:20px;
+overflow-x:auto;
+background:white;
+}
+
+.telemetry-table{
+width:100%;
+border-collapse:collapse;
+font-size:0.9rem;
+}
+
+.telemetry-table th,
+.telemetry-table td{
+padding:10px 12px;
+border-bottom:1px solid #ddd;
+text-align:left;
+}
+
+.telemetry-table th{
+background:var(--header-bg);
+color:white;
+position:sticky;
+top:0;
+z-index:1;
+}
+
+.telemetry-table tbody tr:hover{
+background:#dce8f5;
+cursor:pointer;
+}
+
+/* MARKERS */
+
+.animal-marker{
+border-radius:50%;
+display:flex;
+align-items:center;
+justify-content:center;
+color:white;
+font-weight:bold;
+font-size:12px;
+border:2px solid white;
+box-shadow:0 0 5px rgba(0,0,0,0.6);
+background:#007bff;
+}
+
+.star-marker{
+font-size:18px;
+color:#ffcc00;
+}
+
+/* FIELD UPDATE PANEL */
+
+.field-panel{
+position:fixed;
+top:0;
+right:-350px;
+width:350px;
+height:100%;
+background:white;
+box-shadow:-3px 0 10px rgba(0,0,0,0.2);
+padding:20px;
+transition:right 0.3s;
+overflow:auto;
+z-index:999;
+}
+
+.field-panel.open{
+right:0;
+}
+
+.field-btn{
+padding:7px 12px;
+background:#2c3e50;
+color:white;
+border:none;
+border-radius:4px;
+cursor:pointer;
+}
+
 </style>
 </head>
+
 <body>
+
 <header>
-  <div class="header-logos" aria-label="Header logos">
-    <img src="image.png" alt="Logo 1" class="header-logo" onerror="this.style.display='none'">
-    <img src="unnamed.png" alt="Logo 2" class="header-logo" onerror="this.style.display='none'">
-  </div>
-  <h1>Pali FT Hatchlings Telemetry Dashboard</h1>
+<img src="image.png">
+<img src="unnamed.png">
+<h1>🐊 Pali FT Hatchlings Telemetry Dashboard</h1>
 </header>
+
 <div class="top-panel">
-  <div class="filter-group">
-    <label for="animalFilter">Select Animal ID</label>
-    <select id="animalFilter"><option value="all">All Animals</option></select>
-  </div>
-  <div class="hint-text">Use the dropdown to focus on an individual gharial, inspect its track, and review telemetry observations.</div>
-  <div class="telemetry-status"><span class="status-dot"></span><span id="statusText">Loading...</span></div>
-  <button class="field-updates-btn" type="button" onclick="openFieldUpdates()">Field Update</button>
+
+<div class="filter-group">
+<label>Select Animal</label>
+<select id="animalFilter">
+<option value="all">All Animals</option>
+</select>
 </div>
-<section class="analytics-panel" id="analyticsPanel" aria-live="polite">
-  <div class="analytics-title" id="analyticsTitle">Movement Analytics</div>
-  <div class="analytics-grid">
-    <article class="analytics-card"><span class="analytics-label">Maximum displacement from release</span><span class="analytics-value" id="maxDisplacementValue">0 m</span></article>
-    <article class="analytics-card"><span class="analytics-label">Current distance from release</span><span class="analytics-value" id="currentDisplacementValue">0 m</span></article>
-    <article class="analytics-card"><span class="analytics-label">Distance from previous fix</span><span class="analytics-value" id="previousFixValue">0 m</span></article>
-  </div>
-</section>
-<div class="updates-overlay" id="updatesOverlay" aria-hidden="true">
-  <div class="updates-header"><span>Field Update</span><button class="updates-close" type="button" onclick="closeFieldUpdates()" title="Close">&times;</button></div>
-  <div class="updates-list" id="updatesList"><p class="updates-msg">Loading update...</p></div>
+
+<button class="field-btn" onclick="toggleFieldPanel()">Field Updates</button>
+
 </div>
-<div class="map-container"><div id="map"></div></div>
-<p class="table-hint">Click any row to jump to its location on the map.</p>
-<div class="table-container"><div class="table-shell"><table class="telemetry-table" id="dataTable"><thead><tr><th>Animal ID</th><th>Timestamp</th><th>Place</th><th>Activity</th><th>Signal Strength</th><th>Latitude</th><th>Longitude</th><th>Remarks</th></tr></thead><tbody></tbody></table></div></div>
+
+<div class="analytics-panel" id="analyticsPanel"></div>
+
+<div class="status-bar" id="statusBar">
+Latest Telemetry: loading...
+</div>
+
+<div class="map-container">
+<div id="map"></div>
+</div>
+
+<p class="table-hint">💡 Click any row to jump to its location on the map</p>
+
+<div class="table-container">
+<table class="telemetry-table" id="dataTable">
+<thead>
+<tr>
+<th>Animal ID</th>
+<th>Timestamp</th>
+<th>Place</th>
+<th>Activity</th>
+<th>Signal</th>
+<th>Latitude</th>
+<th>Longitude</th>
+<th>Remarks</th>
+</tr>
+</thead>
+<tbody></tbody>
+</table>
+</div>
+
+<div class="field-panel" id="fieldPanel">
+<h3>Field Update</h3>
+<p id="fieldUpdateText">Loading...</p>
+</div>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/OverlappingMarkerSpiderfier-Leaflet/0.2.6/oms.min.js"></script>
+
 <script>
-const CSV_URL="https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=0";
-const UPDATES_CSV_URL="https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=238985281";
-const MAP_CENTER=[25.84,76.56],MAP_ZOOM=13,DEFAULT_ROWS=5,HIGHLIGHTED_IDS=new Set(["30","33","34","38","64","96","98"]);
-let map,oms,mapLayerGroup,rawData=[],animalsData={},latestRecords={},markerMapping={};
-function init(){initMap();loadCSVData();loadFieldUpdates();document.getElementById("animalFilter").addEventListener("change",e=>updateDashboard(e.target.value));}
-function initMap(){map=L.map("map").setView(MAP_CENTER,MAP_ZOOM);L.tileLayer("https://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}",{maxZoom:20,attribution:"Map data   Google"}).addTo(map);mapLayerGroup=L.featureGroup().addTo(map);oms=new OverlappingMarkerSpiderfier(map,{keepSpiderfied:true,nearbyDistance:22,circleSpiralSwitchover:6});oms.addListener("click",marker=>marker.openPopup());}
-function loadCSVData(){Papa.parse(CSV_URL,{download:true,header:true,skipEmptyLines:true,complete:results=>{rawData=(results.data||[]).filter(isTelemetryRowValid);processData();populateDropdown();updateDashboard("all");},error:error=>{console.error(error);alert("CSV loading failed");}});}
-function isTelemetryRowValid(row){return row&&Object.values(row).some(value=>String(value||"").trim()!=="");}
-function processData(){animalsData={};latestRecords={};rawData.forEach(row=>{const id=String(row["Animal ID"]||"").trim();if(!id)return;row["Animal ID"]=id;row.parsedDate=parseCustomDate(row["Timestamp"]);if(!animalsData[id])animalsData[id]=[];animalsData[id].push(row);});Object.keys(animalsData).forEach(id=>{animalsData[id].sort((a,b)=>b.parsedDate-a.parsedDate);latestRecords[id]=animalsData[id][0];});updateTelemetryStatus();}
-function parseCustomDate(dateString){if(!dateString||typeof dateString!=="string")return new Date(0);const trimmed=dateString.trim();if(!trimmed)return new Date(0);const parts=trimmed.split(" "),dateParts=(parts[0]||"").split("-"),timeParts=parts[1]?parts[1].split(":"): ["00","00"];if(dateParts.length!==3)return new Date(0);const day=parseInt(dateParts[0],10),month=parseInt(dateParts[1],10)-1,year=parseInt(dateParts[2],10),hour=parseInt(timeParts[0]||"0",10),minute=parseInt(timeParts[1]||"0",10),date=new Date(year,month,day,hour,minute);return Number.isNaN(date.getTime())?new Date(0):date;}
-function populateDropdown(){const select=document.getElementById("animalFilter");select.innerHTML='<option value="all">All Animals</option>';Object.keys(animalsData).sort((a,b)=>a.localeCompare(b,undefined,{numeric:true,sensitivity:"base"})).forEach(id=>{const option=document.createElement("option");option.value=id;option.textContent=id;select.appendChild(option);});}
-function updateDashboard(selectedId){renderAnalytics(selectedId);renderMap(selectedId);renderTable(selectedId);}
-function markerKey(record){return [record["Animal ID"],record["Timestamp"],record["Latitude"],record["Longitude"]].join("_");}
-function renderMap(selectedId){if(oms)oms.clearMarkers();mapLayerGroup.clearLayers();markerMapping={};if(selectedId==="all"){const bounds=[];Object.keys(latestRecords).forEach(id=>{const record=latestRecords[id],lat=parseFloat(record["Latitude"]),lng=parseFloat(record["Longitude"]);if(!Number.isFinite(lat)||!Number.isFinite(lng))return;const colorClass=HIGHLIGHTED_IDS.has(id)?"marker-selected":"marker-default",marker=createAnimalMarker(record,colorClass);mapLayerGroup.addLayer(marker);oms.addMarker(marker);markerMapping[markerKey(record)]=marker;bounds.push([lat,lng]);});if(bounds.length>0)map.fitBounds(bounds,{padding:[50,50],maxZoom:MAP_ZOOM});else map.setView(MAP_CENTER,MAP_ZOOM);return;}const records=animalsData[selectedId]||[],latLngs=[],bounds=[],colorClass=HIGHLIGHTED_IDS.has(String(selectedId))?"marker-selected":"marker-default";for(let i=records.length-1;i>=0;i-=1){const record=records[i],lat=parseFloat(record["Latitude"]),lng=parseFloat(record["Longitude"]);if(!Number.isFinite(lat)||!Number.isFinite(lng))continue;const marker=createAnimalMarker(record,colorClass);mapLayerGroup.addLayer(marker);oms.addMarker(marker);markerMapping[markerKey(record)]=marker;latLngs.push([lat,lng]);bounds.push([lat,lng]);}if(latLngs.length>1)mapLayerGroup.addLayer(L.polyline(latLngs,{color:"#ffc107",weight:3,opacity:.85,dashArray:"6, 10"}));addReleasePointMarker(records);if(bounds.length>0)map.fitBounds(bounds,{padding:[50,50]});else map.setView(MAP_CENTER,MAP_ZOOM);}
-function createAnimalMarker(record,colorClass){const lat=parseFloat(record["Latitude"]),lng=parseFloat(record["Longitude"]),id=record["Animal ID"],signalVal=record["Signal Strength"]||record["signal strength"]||record["SignalStrength"]||"N/A";const icon=L.divIcon({className:"animal-marker "+colorClass,html:"<span>"+escapeHtml(id)+"</span>",iconSize:[30,30],iconAnchor:[15,15],popupAnchor:[0,-15]});const marker=L.marker([lat,lng],{icon});marker.bindPopup('<div class="custom-popup"><div class="popup-row"><b>Animal ID:</b> '+escapeHtml(id)+'</div><div class="popup-row"><b>Timestamp:</b> '+escapeHtml(record["Timestamp"]||"N/A")+'</div><div class="popup-row"><b>Place:</b><br>'+escapeHtml(record["Place"]||"N/A")+'</div><div class="popup-row"><b>Activity:</b><br>'+escapeHtml(record["Activity"]||"N/A")+'</div><div class="popup-row"><b>Signal Strength:</b><br>'+escapeHtml(signalVal)+'</div><div class="popup-row"><b>Latitude:</b> '+escapeHtml(record["Latitude"]||"N/A")+'</div><div class="popup-row"><b>Longitude:</b> '+escapeHtml(record["Longitude"]||"N/A")+'</div><div class="popup-row"><b>Remarks:</b><br>'+escapeHtml(record["Remarks"]||"None")+'</div></div>');return marker;}
-function addReleasePointMarker(records){if(!records||records.length===0)return;const releaseRecord=records[records.length-1],lat=parseFloat(releaseRecord["Latitude"]),lng=parseFloat(releaseRecord["Longitude"]);if(!Number.isFinite(lat)||!Number.isFinite(lng))return;const starIcon=L.divIcon({className:"",html:'<div class="release-marker" aria-hidden="true">&#9733;</div>',iconSize:[40,40],iconAnchor:[20,20],popupAnchor:[0,-18]});const releaseMarker=L.marker([lat,lng],{icon:starIcon,zIndexOffset:1000});releaseMarker.bindPopup('<div class="custom-popup"><div class="popup-row"><b>Release Point</b></div><div class="popup-row"><b>Animal ID:</b> '+escapeHtml(releaseRecord["Animal ID"]||"N/A")+'</div><div class="popup-row"><b>First record:</b> '+escapeHtml(releaseRecord["Timestamp"]||"N/A")+'</div><div class="popup-row"><b>Latitude:</b> '+escapeHtml(releaseRecord["Latitude"]||"N/A")+'</div><div class="popup-row"><b>Longitude:</b> '+escapeHtml(releaseRecord["Longitude"]||"N/A")+'</div></div>');mapLayerGroup.addLayer(releaseMarker);mapLayerGroup.addLayer(L.marker([lat,lng],{interactive:false,keyboard:false,icon:L.divIcon({className:"",html:'<div class="release-label">Release Point</div>',iconSize:[110,28],iconAnchor:[-8,18]})}));}
-function renderTable(selectedId){const tbody=document.querySelector("#dataTable tbody");tbody.innerHTML="";let tableData=[];tableData=selectedId==="all"?Object.values(latestRecords).sort((a,b)=>b.parsedDate-a.parsedDate):(animalsData[selectedId]||[]).slice();const total=tableData.length;tableData.forEach((row,index)=>{const tr=document.createElement("tr");if(index>=DEFAULT_ROWS)tr.classList.add("row-hidden");const key=markerKey(row),signalVal=row["Signal Strength"]||row["signal strength"]||row["SignalStrength"]||"";tr.innerHTML="<td><strong>"+escapeHtml(row["Animal ID"]||"")+"</strong></td><td>"+escapeHtml(row["Timestamp"]||"")+"</td><td>"+escapeHtml(row["Place"]||"")+"</td><td>"+escapeHtml(row["Activity"]||"")+"</td><td>"+escapeHtml(signalVal)+"</td><td>"+escapeHtml(row["Latitude"]||"")+"</td><td>"+escapeHtml(row["Longitude"]||"")+"</td><td>"+escapeHtml(row["Remarks"]||"")+"</td>";tr.addEventListener("click",()=>{document.querySelectorAll("#dataTable tbody tr").forEach(tableRow=>tableRow.classList.remove("row-active"));tr.classList.add("row-active");document.querySelector(".map-container").scrollIntoView({behavior:"smooth",block:"start"});const marker=markerMapping[key];if(marker){window.setTimeout(()=>{map.setView(marker.getLatLng(),Math.max(map.getZoom(),15),{animate:true});marker.openPopup();},450);}});tbody.appendChild(tr);});if(total>DEFAULT_ROWS){const seeMoreTr=document.createElement("tr");seeMoreTr.classList.add("see-more-row");seeMoreTr.innerHTML='<td colspan="8"><span class="see-more-btn">See more &raquo; ('+(total-DEFAULT_ROWS)+' more entries)</span></td>';let expanded=false;seeMoreTr.addEventListener("click",()=>{expanded=!expanded;if(expanded){tbody.querySelectorAll("tr.row-hidden").forEach(row=>row.classList.remove("row-hidden"));seeMoreTr.querySelector(".see-more-btn").innerHTML="Show less &laquo;";return;}Array.from(tbody.querySelectorAll("tr:not(.see-more-row)")).forEach((row,index)=>{if(index>=DEFAULT_ROWS)row.classList.add("row-hidden");});seeMoreTr.querySelector(".see-more-btn").innerHTML='See more &raquo; ('+(total-DEFAULT_ROWS)+' more entries)';tbody.closest(".table-container").scrollIntoView({behavior:"smooth",block:"start"});});tbody.appendChild(seeMoreTr);}}
-function haversineDistance(lat1,lon1,lat2,lon2){const r=6371000,p1=lat1*Math.PI/180,p2=lat2*Math.PI/180,dp=(lat2-lat1)*Math.PI/180,dl=(lon2-lon1)*Math.PI/180;const a=Math.sin(dp/2)**2+Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;return r*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));}
-function formatMeters(value){return Number.isFinite(value)?Math.round(value)+" m":"N/A";}
-function renderAnalytics(selectedId){const panel=document.getElementById("analyticsPanel");if(selectedId==="all"){panel.classList.remove("visible");return;}const records=animalsData[selectedId]||[];if(!records.length){panel.classList.remove("visible");return;}const chronological=records.slice().reverse(),release=chronological[0],latest=records[0],previous=records[1],releaseLat=parseFloat(release["Latitude"]),releaseLng=parseFloat(release["Longitude"]);let maxDisplacement=0;if(Number.isFinite(releaseLat)&&Number.isFinite(releaseLng)){chronological.forEach(record=>{const lat=parseFloat(record["Latitude"]),lng=parseFloat(record["Longitude"]);if(!Number.isFinite(lat)||!Number.isFinite(lng))return;const displacement=haversineDistance(releaseLat,releaseLng,lat,lng);if(displacement>maxDisplacement)maxDisplacement=displacement;});}let currentDisplacement=NaN;if(Number.isFinite(releaseLat)&&Number.isFinite(releaseLng)){const latestLat=parseFloat(latest["Latitude"]),latestLng=parseFloat(latest["Longitude"]);if(Number.isFinite(latestLat)&&Number.isFinite(latestLng))currentDisplacement=haversineDistance(releaseLat,releaseLng,latestLat,latestLng);}let previousFixMovement=NaN;if(previous){const latestLat=parseFloat(latest["Latitude"]),latestLng=parseFloat(latest["Longitude"]),prevLat=parseFloat(previous["Latitude"]),prevLng=parseFloat(previous["Longitude"]);if(Number.isFinite(latestLat)&&Number.isFinite(latestLng)&&Number.isFinite(prevLat)&&Number.isFinite(prevLng))previousFixMovement=haversineDistance(latestLat,latestLng,prevLat,prevLng);}document.getElementById("analyticsTitle").textContent="Movement Analytics   ID "+selectedId;document.getElementById("maxDisplacementValue").textContent=formatMeters(maxDisplacement);document.getElementById("currentDisplacementValue").textContent=formatMeters(currentDisplacement);document.getElementById("previousFixValue").textContent=formatMeters(previousFixMovement);panel.classList.add("visible");}
-function updateTelemetryStatus(){let latest=null;Object.keys(latestRecords).forEach(id=>{const date=latestRecords[id].parsedDate;if(!latest||date>latest)latest=date;});const statusText=document.getElementById("statusText");if(!latest||latest.getTime()===0){statusText.textContent="No telemetry data";return;}statusText.textContent="Latest Telemetry: "+latest.toLocaleString("en-IN",{day:"numeric",month:"long",year:"numeric",hour:"2-digit",minute:"2-digit",hour12:false});}
-function openFieldUpdates(){const overlay=document.getElementById("updatesOverlay");overlay.classList.add("open");overlay.setAttribute("aria-hidden","false");}
-function closeFieldUpdates(){const overlay=document.getElementById("updatesOverlay");overlay.classList.remove("open");overlay.setAttribute("aria-hidden","true");}
-function loadFieldUpdates(){Papa.parse(UPDATES_CSV_URL,{download:true,header:true,skipEmptyLines:true,complete:results=>{const list=document.getElementById("updatesList");list.innerHTML="";const updates=(results.data||[]).filter(row=>row&&(String(row["Date"]||"").trim()||String(row["Update"]||"").trim())).sort((a,b)=>parseCustomDate(String(b["Date"]||"").trim())-parseCustomDate(String(a["Date"]||"").trim()));if(!updates.length){list.innerHTML='<p class="updates-msg">No field updates available.</p>';return;}const latestUpdate=updates[0],item=document.createElement("div");item.className="update-item";item.innerHTML='<div class="update-label">Field Update</div><div class="update-text">'+escapeHtml(latestUpdate["Date"]||"")+'   '+escapeHtml(latestUpdate["Update"]||"")+'</div>';list.appendChild(item);},error:()=>{document.getElementById("updatesList").innerHTML='<p class="updates-msg">Could not load field updates. Check the Google Sheets field updates tab.</p>';}});}
-function escapeHtml(value){return String(value).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/\"/g,"&quot;").replace(/'/g,"&#39;");}
-document.addEventListener("DOMContentLoaded",init);
+
+const CSV_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=0';
+const UPDATE_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_BjxOwPVysci5AiFL-WAxoQ/export?format=csv&gid=238985281';
+
+const MAP_CENTER=[25.84,76.56];
+const MAP_ZOOM=13;
+
+let map;
+let oms;
+
+let rawData=[];
+let animalsData={};
+let latestRecords={};
+let markers=[];
+let markerMapping={};
+
+function init(){
+initMap();
+loadTelemetry();
+loadFieldUpdates();
+
+document.getElementById('animalFilter')
+.addEventListener('change',e=>updateDashboard(e.target.value));
+}
+
+function initMap(){
+map=L.map('map').setView(MAP_CENTER,MAP_ZOOM);
+
+L.tileLayer(
+'http://mt0.google.com/vt/lyrs=y&hl=en&x={x}&y={y}&z={z}',
+{maxZoom:20}
+).addTo(map);
+
+oms=new OverlappingMarkerSpiderfier(map,{
+keepSpiderfied:true
+});
+}
+
+function loadTelemetry(){
+
+Papa.parse(CSV_URL,{
+download:true,
+header:true,
+skipEmptyLines:true,
+complete:function(results){
+
+rawData=results.data;
+
+processData();
+populateDropdown();
+updateDashboard('all');
+updateStatus();
+
+}
+});
+
+}
+
+function loadFieldUpdates(){
+
+Papa.parse(UPDATE_URL,{
+download:true,
+header:true,
+skipEmptyLines:true,
+complete:function(results){
+
+let rows=results.data;
+
+let latest=null;
+
+rows.forEach(r=>{
+if(!r.Date) return;
+
+let d=parseDate(r.Date);
+
+if(!latest || d>latest.date)
+latest={date:d,text:r.Update};
+});
+
+if(latest){
+document.getElementById('fieldUpdateText')
+.innerText=formatDate(latest.date)+" — "+latest.text;
+}
+
+}
+});
+
+}
+
+function processData(){
+
+animalsData={};
+latestRecords={};
+
+rawData.forEach(row=>{
+
+let id=row['Animal ID'];
+if(!id) return;
+
+row.parsedDate=parseDate(row['Timestamp']);
+
+if(!animalsData[id]) animalsData[id]=[];
+
+animalsData[id].push(row);
+
+});
+
+for(let id in animalsData){
+
+animalsData[id].sort((a,b)=>b.parsedDate-a.parsedDate);
+
+latestRecords[id]=animalsData[id][0];
+
+}
+
+}
+
+function parseDate(s){
+
+if(!s) return new Date(0);
+
+let p=s.split(' ');
+
+let d=p[0].split('-');
+let t=p[1]?p[1].split(':'):['00','00'];
+
+return new Date(
+parseInt(d[2]),
+parseInt(d[1])-1,
+parseInt(d[0]),
+parseInt(t[0]),
+parseInt(t[1])
+);
+
+}
+
+function formatDate(d){
+
+return d.toLocaleDateString('en-GB',{
+day:'numeric',
+month:'long',
+year:'numeric'
+})+" "+
+d.toLocaleTimeString('en-GB',{
+hour:'2-digit',
+minute:'2-digit'
+});
+
+}
+
+function populateDropdown(){
+
+let sel=document.getElementById('animalFilter');
+
+Object.keys(animalsData).sort((a,b)=>a-b)
+.forEach(id=>{
+let o=document.createElement('option');
+o.value=id;
+o.textContent=id;
+sel.appendChild(o);
+});
+
+}
+
+function clearMap(){
+
+markers.forEach(m=>map.removeLayer(m));
+markers=[];
+markerMapping={};
+
+}
+
+function updateDashboard(id){
+
+clearMap();
+
+renderMap(id);
+renderTable(id);
+
+}
+
+function renderMap(selectedId){
+
+if(selectedId==='all'){
+
+for(let id in latestRecords){
+
+let r=latestRecords[id];
+
+addMarker(r);
+
+}
+
+}
+
+else{
+
+let records=animalsData[selectedId]||[];
+
+let latlngs=[];
+
+for(let i=records.length-1;i>=0;i--){
+
+let r=records[i];
+
+let m=addMarker(r);
+
+latlngs.push([r.Latitude,r.Longitude]);
+
+}
+
+if(latlngs.length>1){
+
+L.polyline(latlngs,{
+color:'#ffc107',
+weight:3,
+dashArray:'5,10'
+}).addTo(map);
+
+}
+
+addReleaseMarker(records[records.length-1]);
+
+computeAnalytics(selectedId);
+
+}
+
+}
+
+function addMarker(record){
+
+let lat=parseFloat(record['Latitude']);
+let lng=parseFloat(record['Longitude']);
+
+if(isNaN(lat)||isNaN(lng)) return;
+
+let id=record['Animal ID'];
+
+let icon=L.divIcon({
+className:'animal-marker',
+html:id,
+iconSize:[28,28],
+iconAnchor:[14,14]
+});
+
+let m=L.marker([lat,lng],{icon}).addTo(map);
+
+m.bindPopup(
+"<b>ID:</b> "+id+
+"<br><b>Time:</b> "+record['Timestamp']+
+"<br><b>Place:</b> "+record['Place']+
+"<br><b>Activity:</b> "+record['Activity']+
+"<br><b>Signal:</b> "+record['Signal Strength']
+);
+
+markers.push(m);
+
+oms.addMarker(m);
+
+markerMapping[id+"_"+record['Timestamp']]=m;
+
+return m;
+
+}
+
+function addReleaseMarker(record){
+
+if(!record) return;
+
+let lat=record.Latitude;
+let lng=record.Longitude;
+
+let icon=L.divIcon({
+className:'star-marker',
+html:'⭐',
+iconSize:[20,20]
+});
+
+L.marker([lat,lng],{icon}).addTo(map)
+.bindPopup("Release Point");
+
+}
+
+function haversine(a,b){
+
+let R=6371000;
+
+let lat1=a[0]*Math.PI/180;
+let lat2=b[0]*Math.PI/180;
+
+let dlat=(b[0]-a[0])*Math.PI/180;
+let dlon=(b[1]-a[1])*Math.PI/180;
+
+let x=Math.sin(dlat/2)**2+
+Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
+
+let c=2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+
+return R*c;
+
+}
+
+function computeAnalytics(id){
+
+let rec=animalsData[id];
+
+if(!rec||rec.length<2) return;
+
+let release=[rec[rec.length-1].Latitude,rec[rec.length-1].Longitude];
+let latest=[rec[0].Latitude,rec[0].Longitude];
+
+let max=0;
+
+rec.forEach(r=>{
+let d=haversine(release,[r.Latitude,r.Longitude]);
+if(d>max) max=d;
+});
+
+let current=haversine(release,latest);
+
+let prevDist=haversine(
+[rec[1].Latitude,rec[1].Longitude],
+latest
+);
+
+let type="Settler";
+
+if(max>=500 && max<=1500) type="Explorer";
+if(max>1500) type="Disperser";
+
+let panel=document.getElementById('analyticsPanel');
+
+panel.style.display='block';
+
+panel.innerHTML=
+"<b>Movement Analytics — ID "+id+"</b><br>"+
+"Maximum displacement from release: "+Math.round(max)+" m<br>"+
+"Current distance from release: "+Math.round(current)+" m<br>"+
+"Distance from previous fix: "+Math.round(prevDist)+" m<br>"+
+"Movement type: "+type;
+
+}
+
+function updateStatus(){
+
+let latest=null;
+
+rawData.forEach(r=>{
+if(!latest || parseDate(r.Timestamp)>latest)
+latest=parseDate(r.Timestamp);
+});
+
+if(latest){
+
+document.getElementById('statusBar')
+.innerText="Latest Telemetry: "+formatDate(latest);
+
+}
+
+}
+
+function renderTable(selectedId){
+
+let tbody=document.querySelector('#dataTable tbody');
+tbody.innerHTML='';
+
+let data=[];
+
+if(selectedId==='all')
+data=Object.values(latestRecords);
+else
+data=animalsData[selectedId];
+
+data.sort((a,b)=>b.parsedDate-a.parsedDate);
+
+data.forEach(r=>{
+
+let tr=document.createElement('tr');
+
+tr.innerHTML=`
+<td>${r['Animal ID']}</td>
+<td>${r['Timestamp']}</td>
+<td>${r['Place']}</td>
+<td>${r['Activity']}</td>
+<td>${r['Signal Strength']}</td>
+<td>${r['Latitude']}</td>
+<td>${r['Longitude']}</td>
+<td>${r['Remarks']||''}</td>
+`;
+
+tr.onclick=function(){
+
+let key=r['Animal ID']+"_"+r['Timestamp'];
+
+let m=markerMapping[key];
+
+if(m){
+
+map.setView(m.getLatLng(),16);
+
+m.openPopup();
+
+}
+
+};
+
+tbody.appendChild(tr);
+
+});
+
+}
+
+function toggleFieldPanel(){
+
+document.getElementById('fieldPanel')
+.classList.toggle('open');
+
+}
+
+document.addEventListener('DOMContentLoaded',init);
+
 </script>
+
 </body>
 </html>
-
