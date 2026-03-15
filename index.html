@@ -31,8 +31,6 @@ flex-direction:column;
 min-height:100vh;
 }
 
-/* HEADER */
-
 header{
 background:var(--header-bg);
 color:white;
@@ -51,8 +49,6 @@ header h1{
 text-align:center;
 font-size:1.5rem;
 }
-
-/* PANELS */
 
 .top-panel{
 background:white;
@@ -94,8 +90,6 @@ padding:8px 20px;
 font-size:0.9rem;
 }
 
-/* MAP */
-
 .map-container{
 height:var(--map-height);
 }
@@ -103,15 +97,6 @@ height:var(--map-height);
 #map{
 width:100%;
 height:100%;
-}
-
-/* TABLE */
-
-.table-hint{
-font-size:0.85rem;
-color:#777;
-padding:8px 20px 0 20px;
-background:white;
 }
 
 .table-container{
@@ -146,8 +131,6 @@ background:#dce8f5;
 cursor:pointer;
 }
 
-/* MARKERS */
-
 .animal-marker{
 border-radius:50%;
 display:flex;
@@ -161,12 +144,13 @@ box-shadow:0 0 5px rgba(0,0,0,0.6);
 background:#007bff;
 }
 
-.star-marker{
-font-size:18px;
-color:#ffcc00;
+.marker-dead{
+background:#dc3545 !important;
 }
 
-/* FIELD UPDATE PANEL */
+.star-marker{
+font-size:18px;
+}
 
 .field-panel{
 position:fixed;
@@ -184,6 +168,17 @@ z-index:999;
 
 .field-panel.open{
 right:0;
+}
+
+.close-btn{
+cursor:pointer;
+font-weight:bold;
+font-size:18px;
+}
+
+.field-update{
+padding:8px 0;
+border-bottom:1px solid #eee;
 }
 
 .field-btn{
@@ -229,8 +224,6 @@ Latest Telemetry: loading...
 <div id="map"></div>
 </div>
 
-<p class="table-hint">💡 Click any row to jump to its location on the map</p>
-
 <div class="table-container">
 <table class="telemetry-table" id="dataTable">
 <thead>
@@ -239,7 +232,7 @@ Latest Telemetry: loading...
 <th>Timestamp</th>
 <th>Place</th>
 <th>Activity</th>
-<th>Signal</th>
+<th>Signal Strength</th>
 <th>Latitude</th>
 <th>Longitude</th>
 <th>Remarks</th>
@@ -250,8 +243,14 @@ Latest Telemetry: loading...
 </div>
 
 <div class="field-panel" id="fieldPanel">
-<h3>Field Update</h3>
-<p id="fieldUpdateText">Loading...</p>
+
+<div style="display:flex;justify-content:space-between;">
+<h3>Field Updates</h3>
+<div class="close-btn" onclick="toggleFieldPanel()">✕</div>
+</div>
+
+<div id="fieldUpdatesList"></div>
+
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -265,6 +264,8 @@ const UPDATE_URL='https://docs.google.com/spreadsheets/d/10maxgDHDOISlVaN3kuc0_B
 
 const MAP_CENTER=[25.84,76.56];
 const MAP_ZOOM=13;
+
+const DEAD_IDS=['30','33','34','38','96','64','98'];
 
 let map;
 let oms;
@@ -285,6 +286,7 @@ document.getElementById('animalFilter')
 }
 
 function initMap(){
+
 map=L.map('map').setView(MAP_CENTER,MAP_ZOOM);
 
 L.tileLayer(
@@ -292,9 +294,8 @@ L.tileLayer(
 {maxZoom:20}
 ).addTo(map);
 
-oms=new OverlappingMarkerSpiderfier(map,{
-keepSpiderfied:true
-});
+oms=new OverlappingMarkerSpiderfier(map);
+
 }
 
 function loadTelemetry(){
@@ -326,22 +327,20 @@ skipEmptyLines:true,
 complete:function(results){
 
 let rows=results.data;
+let container=document.getElementById("fieldUpdatesList");
 
-let latest=null;
+rows.reverse().forEach(r=>{
 
-rows.forEach(r=>{
-if(!r.Date) return;
+if(!r.Date || !r.Update) return;
 
-let d=parseDate(r.Date);
+let div=document.createElement("div");
+div.className="field-update";
 
-if(!latest || d>latest.date)
-latest={date:d,text:r.Update};
+div.innerHTML="<b>"+r.Date+"</b><br>"+r.Update;
+
+container.appendChild(div);
+
 });
-
-if(latest){
-document.getElementById('fieldUpdateText')
-.innerText=formatDate(latest.date)+" — "+latest.text;
-}
 
 }
 });
@@ -395,20 +394,6 @@ parseInt(t[1])
 
 }
 
-function formatDate(d){
-
-return d.toLocaleDateString('en-GB',{
-day:'numeric',
-month:'long',
-year:'numeric'
-})+" "+
-d.toLocaleTimeString('en-GB',{
-hour:'2-digit',
-minute:'2-digit'
-});
-
-}
-
 function populateDropdown(){
 
 let sel=document.getElementById('animalFilter');
@@ -423,71 +408,6 @@ sel.appendChild(o);
 
 }
 
-function clearMap(){
-
-markers.forEach(m=>map.removeLayer(m));
-markers=[];
-markerMapping={};
-
-}
-
-function updateDashboard(id){
-
-clearMap();
-
-renderMap(id);
-renderTable(id);
-
-}
-
-function renderMap(selectedId){
-
-if(selectedId==='all'){
-
-for(let id in latestRecords){
-
-let r=latestRecords[id];
-
-addMarker(r);
-
-}
-
-}
-
-else{
-
-let records=animalsData[selectedId]||[];
-
-let latlngs=[];
-
-for(let i=records.length-1;i>=0;i--){
-
-let r=records[i];
-
-let m=addMarker(r);
-
-latlngs.push([r.Latitude,r.Longitude]);
-
-}
-
-if(latlngs.length>1){
-
-L.polyline(latlngs,{
-color:'#ffc107',
-weight:3,
-dashArray:'5,10'
-}).addTo(map);
-
-}
-
-addReleaseMarker(records[records.length-1]);
-
-computeAnalytics(selectedId);
-
-}
-
-}
-
 function addMarker(record){
 
 let lat=parseFloat(record['Latitude']);
@@ -497,8 +417,12 @@ if(isNaN(lat)||isNaN(lng)) return;
 
 let id=record['Animal ID'];
 
+let cls='animal-marker';
+
+if(DEAD_IDS.includes(id)) cls+=' marker-dead';
+
 let icon=L.divIcon({
-className:'animal-marker',
+className:cls,
 html:id,
 iconSize:[28,28],
 iconAnchor:[14,14]
@@ -507,15 +431,17 @@ iconAnchor:[14,14]
 let m=L.marker([lat,lng],{icon}).addTo(map);
 
 m.bindPopup(
-"<b>ID:</b> "+id+
-"<br><b>Time:</b> "+record['Timestamp']+
+"<b>Animal ID:</b> "+record['Animal ID']+
+"<br><b>Timestamp:</b> "+record['Timestamp']+
 "<br><b>Place:</b> "+record['Place']+
 "<br><b>Activity:</b> "+record['Activity']+
-"<br><b>Signal:</b> "+record['Signal Strength']
+"<br><b>Signal Strength:</b> "+(record['Signal Stength']||'')+
+"<br><b>Latitude:</b> "+record['Latitude']+
+"<br><b>Longitude:</b> "+record['Longitude']+
+"<br><b>Remarks:</b> "+(record['Remarks']||'')
 );
 
 markers.push(m);
-
 oms.addMarker(m);
 
 markerMapping[id+"_"+record['Timestamp']]=m;
@@ -524,158 +450,8 @@ return m;
 
 }
 
-function addReleaseMarker(record){
-
-if(!record) return;
-
-let lat=record.Latitude;
-let lng=record.Longitude;
-
-let icon=L.divIcon({
-className:'star-marker',
-html:'⭐',
-iconSize:[20,20]
-});
-
-L.marker([lat,lng],{icon}).addTo(map)
-.bindPopup("Release Point");
-
-}
-
-function haversine(a,b){
-
-let R=6371000;
-
-let lat1=a[0]*Math.PI/180;
-let lat2=b[0]*Math.PI/180;
-
-let dlat=(b[0]-a[0])*Math.PI/180;
-let dlon=(b[1]-a[1])*Math.PI/180;
-
-let x=Math.sin(dlat/2)**2+
-Math.cos(lat1)*Math.cos(lat2)*Math.sin(dlon/2)**2;
-
-let c=2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-
-return R*c;
-
-}
-
-function computeAnalytics(id){
-
-let rec=animalsData[id];
-
-if(!rec||rec.length<2) return;
-
-let release=[rec[rec.length-1].Latitude,rec[rec.length-1].Longitude];
-let latest=[rec[0].Latitude,rec[0].Longitude];
-
-let max=0;
-
-rec.forEach(r=>{
-let d=haversine(release,[r.Latitude,r.Longitude]);
-if(d>max) max=d;
-});
-
-let current=haversine(release,latest);
-
-let prevDist=haversine(
-[rec[1].Latitude,rec[1].Longitude],
-latest
-);
-
-let type="Settler";
-
-if(max>=500 && max<=1500) type="Explorer";
-if(max>1500) type="Disperser";
-
-let panel=document.getElementById('analyticsPanel');
-
-panel.style.display='block';
-
-panel.innerHTML=
-"<b>Movement Analytics — ID "+id+"</b><br>"+
-"Maximum displacement from release: "+Math.round(max)+" m<br>"+
-"Current distance from release: "+Math.round(current)+" m<br>"+
-"Distance from previous fix: "+Math.round(prevDist)+" m<br>"+
-"Movement type: "+type;
-
-}
-
-function updateStatus(){
-
-let latest=null;
-
-rawData.forEach(r=>{
-if(!latest || parseDate(r.Timestamp)>latest)
-latest=parseDate(r.Timestamp);
-});
-
-if(latest){
-
-document.getElementById('statusBar')
-.innerText="Latest Telemetry: "+formatDate(latest);
-
-}
-
-}
-
-function renderTable(selectedId){
-
-let tbody=document.querySelector('#dataTable tbody');
-tbody.innerHTML='';
-
-let data=[];
-
-if(selectedId==='all')
-data=Object.values(latestRecords);
-else
-data=animalsData[selectedId];
-
-data.sort((a,b)=>b.parsedDate-a.parsedDate);
-
-data.forEach(r=>{
-
-let tr=document.createElement('tr');
-
-tr.innerHTML=`
-<td>${r['Animal ID']}</td>
-<td>${r['Timestamp']}</td>
-<td>${r['Place']}</td>
-<td>${r['Activity']}</td>
-<td>${r['Signal Strength']}</td>
-<td>${r['Latitude']}</td>
-<td>${r['Longitude']}</td>
-<td>${r['Remarks']||''}</td>
-`;
-
-tr.onclick=function(){
-
-let key=r['Animal ID']+"_"+r['Timestamp'];
-
-let m=markerMapping[key];
-
-if(m){
-
-map.setView(m.getLatLng(),16);
-
-m.openPopup();
-
-}
-
-};
-
-tbody.appendChild(tr);
-
-});
-
-}
-
 function toggleFieldPanel(){
-
-document.getElementById('fieldPanel')
-.classList.toggle('open');
-
+document.getElementById('fieldPanel').classList.toggle('open');
 }
 
 document.addEventListener('DOMContentLoaded',init);
